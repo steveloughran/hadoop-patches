@@ -1,0 +1,2862 @@
+diff --git a/ivybuild.xml b/ivybuild.xml
+new file mode 100644
+index 0000000..f0a3e67
+--- /dev/null
++++ b/ivybuild.xml
+@@ -0,0 +1,421 @@
++<?xml version="1.0"?>
++<project name="hadoop-common-ivy" default="published"
++  xmlns:ivy="antlib:org.apache.ivy.ant">
++<!--
++   Licensed to the Apache Software Foundation (ASF) under one or more
++   contributor license agreements.  See the NOTICE file distributed with
++   this work for additional information regarding copyright ownership.
++   The ASF licenses this file to You under the Apache License, Version 2.0
++   (the "License"); you may not use this file except in compliance with
++   the License.  You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
++-->
++
++  <description>
++    This is a build file to publish Hadoop as ivy and maven artifacts.
++    It currently works alongside the original build.xml file, and exists
++    purely to hook up hadoop into the SmartFrog test/release process.
++  </description>
++
++  <!--Override point: allow for overridden in properties to be loaded-->
++  <property file="build.properties" />
++  <property file="../build.properties" />
++
++  <target name="ivy-init-properties" >
++    <property name="ivy.dir" location="ivy" />
++    <loadproperties srcfile="${ivy.dir}/libraries.properties" />
++    <property name="ivysettings.xml" location="${ivy.dir}/ivysettings.xml" />
++    <property name="ivy.jar" location="${ivy.dir}/ivy-${ivy.version}.jar"/>
++    <property name="ivy.org" value="org.apache.hadoop"/>
++
++    <property name="build.dir" location="build" />
++    <property name="build.ivy.dir" location="${build.dir}/ivy" />
++    <property name="build.ivy.lib.dir" location="${build.ivy.dir}/lib" />
++    <property name="build.ivy.report.dir" location="${build.ivy.dir}/report" />
++    <property name="build.ivy.maven.dir" location="${build.ivy.dir}/maven" />
++    <property name="module" value="common" />
++    <property name="build.ivy.maven.pom"
++      location="${build.ivy.maven.dir}/hadoop-${module}-${hadoop.version}.pom" />
++    <property name="build.ivy.maven.jar"
++      location="${build.ivy.maven.dir}/hadoop-${module}-${hadoop.version}.jar" />
++
++    <!--this is the naming policy for artifacts we want pulled down-->
++    <property name="ivy.artifact.retrieve.pattern"
++      value="[conf]/[artifact]-[revision].[ext]"/>
++    <!--this is how artifacts that get built are named-->
++    <property name="ivy.publish.pattern"
++      value="hadoop-common-[revision].[ext]"/>
++    <property name="hadoop.jar"
++      location="${build.dir}/hadoop-${module}-${hadoop.version}.jar" />
++
++    <!--preset to build down; puts us in control of version naming-->
++    <presetdef name="delegate">
++      <ant antfile="build.xml" inheritall="false" inheritrefs="false" >
++        <property name="version" value="${hadoop.version}"/>
++      </ant>
++    </presetdef>
++    <!--preset to build down; puts us in control of version naming-->
++    <presetdef name="delegate2">
++      <subant antfile="build.xml" buildpath="." inheritall="false" inheritrefs="false" >
++        <property name="version" value="${hadoop.version}"/>
++      </subant>
++    </presetdef>
++
++    <!--preset to copy with ant property expansion (and always overwrite)-->
++    <presetdef name="expandingcopy" >
++    <copy overwrite="true">
++      <filterchain>
++        <expandproperties/>
++      </filterchain>
++    </copy>
++  </presetdef>
++  </target>
++
++
++  <target name="ivy-init-dirs" depends="ivy-init-properties" >
++    <mkdir dir="${build.ivy.dir}" />
++    <mkdir dir="${build.ivy.lib.dir}" />
++    <mkdir dir="${build.ivy.report.dir}" />
++    <mkdir dir="${build.ivy.maven.dir}" />
++  </target>
++
++
++  <target name="clean"  depends="ivy-init-properties"
++    description="Clean the output directories" >
++    <delegate target="clean" />
++  </target>
++
++
++  <target name="jar"  depends="ivy-init-dirs"
++    description="build the JAR">
++    <delegate target="jar" />
++  </target>
++
++  <target name="jar-test"  depends="ivy-init-dirs"
++      description="build the JAR">
++    <delegate target="jar-test" />
++  </target>
++
++
++  <!--
++    This looks for Ivy on the classpath, and is used to skip reloading it if found.
++    It looks for an ivy-2.0 file.
++  -->
++  <target name="ivy-probe-antlib" >
++    <condition property="ivy.found">
++      <typefound uri="antlib:org.apache.ivy.ant" name="cleancache"/>
++    </condition>
++  </target>
++
++
++  <!--
++  To avoid Ivy leaking things across big projects, always load Ivy in the same classloader.
++  Also note how we skip loading Ivy if it is already there, just to make sure all is well.
++  -->
++  <target name="ivy-init-antlib" depends="ivy-init-properties,ivy-init-dirs,ivy-probe-antlib" unless="ivy.found">
++
++    <typedef uri="antlib:org.apache.ivy.ant" onerror="fail"
++      loaderRef="ivyLoader">
++      <classpath>
++        <pathelement location="${ivy.jar}"/>
++      </classpath>
++    </typedef>
++    <fail >
++      <condition >
++        <not>
++          <typefound uri="antlib:org.apache.ivy.ant" name="cleancache"/>
++        </not>
++      </condition>
++      You need Apache Ivy 2.0 or later from http://ant.apache.org/
++      It could not be loaded from ${ivy.jar}
++    </fail>
++  </target>
++
++
++  <target name="ivy-init" depends="ivy-init-antlib" >
++
++    <!--Configure Ivy by reading in the settings file
++        If anyone has already read in a settings file into this settings ID, it gets priority
++    -->
++    <ivy:configure settingsId="hadoop.ivy.settings" file="${ivysettings.xml}" override="false"/>
++
++  </target>
++
++  <target name="ivy-resolve" depends="ivy-init">
++    <ivy:resolve settingsRef="hadoop.ivy.settings"/>
++  </target>
++
++  <target name="ivy-retrieve" depends="ivy-resolve"
++    description="Retrieve all Ivy-managed artifacts for the different configurations">
++    <ivy:retrieve settingsRef="hadoop.ivy.settings"
++      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}" sync="true" />
++  </target>
++
++  <target name="ivy-report" depends="ivy-resolve"
++    description="Generate">
++    <ivy:report todir="${build.ivy.report.dir}" settingsRef="hadoop.ivy.settings"/>
++    <echo>
++      Reports generated:
++${build.ivy.report.dir}
++    </echo>
++  </target>
++
++  <target name="assert-hadoop-jar-exists" depends="ivy-init">
++    <fail>
++      <condition >
++        <not>
++          <available file="${hadoop.jar}" />
++        </not>
++      </condition>
++      Not found: ${hadoop.jar}
++      Please run the target "jar" in the main build file
++    </fail>
++
++  </target>
++
++  <target name="ready-to-publish" depends="jar,assert-hadoop-jar-exists,ivy-resolve,jar-test"/>
++
++  <target name="ivy-publish-local" depends="ready-to-publish">
++    <ivy:publish
++      settingsRef="hadoop.ivy.settings"
++      resolver="local"
++      pubrevision="${hadoop.version}"
++      overwrite="true"
++      artifactspattern="${build.dir}/${ivy.publish.pattern}" />
++  </target>
++
++
++  <!-- this is here for curiosity, to see how well the makepom task works
++  Answer: it depends whether you want transitive dependencies excluded or not
++  -->
++  <target name="makepom" depends="ivy-resolve">
++    <ivy:makepom settingsRef="hadoop.ivy.settings"
++      ivyfile="ivy.xml"
++      pomfile="${build.ivy.maven.dir}/generated.pom">
++      <ivy:mapping conf="default" scope="default"/>
++      <ivy:mapping conf="master"  scope="master"/>
++      <ivy:mapping conf="runtime" scope="runtime"/>
++    </ivy:makepom>
++  </target>
++
++  <target name="mvn-install" depends="ready-to-publish">
++    <delegate target="mvn-install" />
++  </target>
++  
++  <target name="copy-jar-to-maven" depends="ready-to-publish">
++    <copy file="${hadoop.jar}"
++      tofile="${build.ivy.maven.jar}"/>
++    <checksum file="${build.ivy.maven.jar}" algorithm="md5"/>
++  </target>
++
++  <target name="copypom" depends="ivy-init-dirs">
++    <expandingcopy file="ivy/hadoop-core.pom"
++      tofile="${build.ivy.maven.pom}"/>
++    <checksum file="${build.ivy.maven.pom}" algorithm="md5"/>
++  </target>
++
++  <target name="maven-artifacts" depends="mvn-install" />
++
++  <target name="published" depends="ivy-publish-local,maven-artifacts">
++
++  </target>
++
++  <target name="ready-to-test" depends="ivy-init-dirs">
++    <property name="test.data.dir" location="${build.dir}/test/data" />
++    <property name="test.reports.dir" location="${build.dir}/test/reports" />
++    <mkdir dir="${test.data.dir}" />
++    <mkdir dir="${test.reports.dir}" />
++  </target>
++
++  <target name="testjob.jar"  depends="ready-to-test">
++    <delegate2 target="jar-test"
++        failonerror="true">
++    </delegate2>
++  </target>
++
++
++  <target name="junit"  depends="ready-to-test,testjob.jar"
++      description="run the junit tests and generate an XML report">
++    <delegate2 target="test-core"
++        failonerror="false">
++      <property name="test.junit.output.format" value="xml" />
++      <property name="test.build.dir" value="${test.data.dir}"/>
++    </delegate2>
++  </target>
++
++  <!-- generate a junit report. 
++  tip: you can run this while junit is still going on-->
++  <target name="junitreport"  depends="ready-to-test">
++    <junitreport todir="${test.reports.dir}">
++      <fileset dir="${test.data.dir}">
++        <include name="TEST-*.xml"/>
++      </fileset>
++      <report format="frames" todir="${test.reports.dir}"/>
++    </junitreport>
++    <echo>reports in ${test.reports.dir}/index.html</echo>
++  </target>
++
++  <target name="tested" depends="junit,junitreport" />
++
++  <target name="svn-init">
++    <presetdef name="svn">
++      <exec executable="svn" failonerror="true">
++      </exec>
++    </presetdef>
++    <property name="issue" value="HADOOP-6194"/>
++    <property name="hadoop.svn.host" value="svn.apache.org" />
++    <property name="hadoop-svn"
++      value="https://${hadoop.svn.host}/repos/asf/hadoop/common"/>
++    <property name="trunk"
++        value="${hadoop-svn}/trunk"/>
++    <property name="branch"
++        value="${hadoop-svn}/branches/${issue}"/>
++    <property name="patches.dir" location="../outgoing"/>
++    <mkdir dir="${patches.dir}" />
++    <property name="patch.version" value="1" />
++    <property name="patch.file" 
++      location="${patches.dir}/${issue}-${patch.version}.patch" />
++  </target>
++
++  <target name="svn-merge" depends="svn-init"
++    description="merge in the trunk"  >
++    <svn>
++      <arg value="merge"/>
++      <arg value="${trunk}"/>
++      <arg value="--accept"/>
++      <arg value="postpone"/>
++    </svn>
++  </target>
++  
++  <target name="svn-diff" depends="svn-init"
++    description="diff the local code against the branch"  >
++    <svn>
++      <arg value="diff"/>
++    </svn>
++  </target>
++
++  <target name="svn-resolved" depends="svn-init"
++    description="mark the tree as resolved"  >
++    <svn>
++      <arg value="resolve"/>
++    </svn>
++  </target>
++  
++   <!--
++  svn commit all changes to the branch
++  -->
++  <target name="svn-commit" depends="svn-init"
++      description="commit to the branch"  >
++    <property name="message" value="Service lifecycle" />
++    <property name="full.message" value="${issue}:  ${message}" />
++    <svn>
++      <arg value="commit" />
++      <arg value="-m"/>
++      <arg value="${full.message}"/>
++    </svn>
++  </target>
++
++
++  <!--
++  svn diff \
++  https://svn.apache.org/repos/asf/hadoop/common/trunk \
++  https://svn.apache.org/repos/asf/hadoop/common/branches/HADOOP-6194
++  -->
++  <target name="svn-diff-trunk" depends="svn-init"
++      description="diff against trunk"  >
++    <svn>
++      <arg value="diff" />
++      <arg value="${trunk}"/>
++      <arg value="${branch}"/>
++    </svn>
++  </target>
++
++  <!--
++  create a changelist; this is what you need for patches
++  -->
++  <target name="svn-create-changelist" depends="svn-init"
++      description="Create a changelist of everything we want in the big patch"  >
++    <property name="core/hadoop" value="src/java/org/apache/hadoop" />
++    <property name="test/core"
++        value="src/test/core/org/apache/hadoop" />
++    <svn>
++      <arg value="changelist"/>
++      <arg value="${issue}"/>
++      <!-- core -->
++      <!-- question this one -->
++      <!--
++      <arg value="${core/hadoop}/security/authorize/ConfiguredPolicy.java" />
++      -->
++      <arg value="${core/hadoop}/http/HttpServer.java" />
++      <arg value="${core/hadoop}/io/ThrowableWritable.java" />
++      <arg value="${core/hadoop}/util/Service.java" />
++      <arg value="${core/hadoop}/util/MockService.java" />
++      <arg value="${test/core}/io/TestThrowableWritable.java" />
++      <arg value="${test/core}/util/TestServiceLifecycle.java" />
++    </svn>
++  </target>
++
++
++  <!--
++  
++  -->
++  <target name="svn-diff-changelist" depends="svn-init"
++      description="diff against trunk"  >
++    <echo> Writing to ${patch.file}</echo>
++    <svn output="${patch.file}" >
++      <arg value="diff" />
++      <arg value="${trunk}/src" />
++      <arg value="${branch}/src" />
++      <arg value="--changelist" />
++      <arg value="${issue}"/>
++    </svn>
++  </target>
++
++    <target name="svn-create-ivy-changelist" depends="svn-init"
++      description="Create a changelist of the Ivy/build/Maven changes"  >
++      <property name="ivy.issue" value="HADOOP-6206" />
++      <property name="ivy.patch.version" value="1" />
++      <property name="ivy.patch.file"
++                location="${patches.dir}/${ivy.issue}-${ivy.patch.version}.patch" />
++      <svn>
++      <arg value="changelist"/>
++      <arg value="${ivy.issue}"/>
++      <!-- core -->
++      <arg value="build.xml" />
++      <arg value="ivy/hadoop-core.pom" />
++      <arg value="ivy/libraries.properties" />
++      <arg value="ivy.xml" />
++    </svn>
++  </target>
++
++   <target name="svn-diff-ivy-changelist" depends="svn-init"
++      description="diff against trunk"  >
++     <property name="ivy.issue" value="HADOOP-6206" />
++      <property name="ivy.patch.version" value="1" />
++      <property name="ivy.patch.file"
++        location="${patches.dir}/${ivy.issue}-${ivy.patch.version}.patch" />
++    <echo> Writing to ${ivy.patch.file}</echo>
++    <svn output="${ivy.patch.file}" >
++      <arg value="diff" />
++      <arg value="--old=${trunk}" />
++      <arg value="build.xml" />
++      <arg value="ivy/hadoop-core.pom" />
++      <arg value="ivy/libraries.properties" />
++      <arg value="ivy.xml" />
++    </svn>
++  </target>
++
++  <target name="ivy-purge-cache" depends="ivy-init-properties"
++      description="Purge the Ivy and maven caches">
++    <delete dir="${user.home}/.ivy/cache/org.apache.hadoop/" />
++    <delete dir="${user.home}/.ivy2/cache/org.apache.hadoop/" />
++    <delete dir="${user.home}/.m2/repository/org/apache/hadoop/" />  
++  </target>
++</project>
+diff --git a/src/java/org/apache/hadoop/http/HttpServer.java b/src/java/org/apache/hadoop/http/HttpServer.java
+index 890ecb8..f08bbf9 100644
+--- a/src/java/org/apache/hadoop/http/HttpServer.java
++++ b/src/java/org/apache/hadoop/http/HttpServer.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.http;
+ import java.io.FileNotFoundException;
+ import java.io.IOException;
+ import java.io.PrintWriter;
++import java.io.InterruptedIOException;
+ import java.net.BindException;
+ import java.net.InetSocketAddress;
+ import java.net.URL;
+@@ -641,6 +642,9 @@ public class HttpServer implements FilterContainer {
+       }
+     } catch (IOException e) {
+       throw e;
++    } catch (InterruptedException e) {
++      throw (IOException) new InterruptedIOException(
++          "Interrupted while starting HTTP server").initCause(e);
+     } catch (Exception e) {
+       throw new IOException("Problem starting http server", e);
+     }
+diff --git a/src/java/org/apache/hadoop/io/ThrowableWritable.java b/src/java/org/apache/hadoop/io/ThrowableWritable.java
+new file mode 100644
+index 0000000..ab84ada
+--- /dev/null
++++ b/src/java/org/apache/hadoop/io/ThrowableWritable.java
+@@ -0,0 +1,299 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.io;
++
++import java.io.DataInput;
++import java.io.DataOutput;
++import java.io.IOException;
++
++
++/**
++ * This provides for a wire form of a chain of {@link Throwable} instances,
++ * retaining class name, stack trace, message and any chained exceptions,
++ * each of which is also turned into a ThrowableWritable instance.
++ *
++ * No attempt is made to turn these back into Throwable instances afterwards,
++ * because history (RMI, SOAP Stacks) has shown this does not work reliably.
++ * It requires everyone to have the same version of every possible exception
++ * that can be raised, including server-side things the JDBC drivers. When
++ * deserialization fails instead of getting useful information about what
++ * went wrong at the far end, you just get a new exception telling you that
++ * something went wrong at the far end, but the program cannot tell you
++ * what it was.
++ */
++public final class ThrowableWritable implements Writable {
++
++  /** throwable classname */
++  private String classname;
++
++  /** throwable message */
++  private String message;
++
++  /** cause: may be null */
++  private ThrowableWritable cause;
++
++  /**
++   * Stack trace as string; will be null when an empty element is created,
++   * otherwise it will be an array of length zero.
++   */
++  private String[] stack;
++
++
++  /**
++   * Empty constructor.
++   * Only use this when you are planning to deserialize data, as the object is
++   * otherwise incomplete.
++   */
++  public ThrowableWritable() {
++  }
++
++
++  /**
++   * Construct a lightweight throwable writeable with no stack trace; and the
++   * message passed in
++   *
++   * @param message message to use
++   */
++  public ThrowableWritable(String message) {
++    this.message = message;
++    stack = new String[0];
++    classname = "";
++  }
++
++  /**
++   * recursively construct from a throwable chain.
++   *
++   * @param thrown The throwable chain to build this writeable from.
++   */
++  public ThrowableWritable(Throwable thrown) {
++    classname = thrown.getClass().getName();
++    message = thrown.getMessage();
++
++    StackTraceElement[] st = thrown.getStackTrace();
++    if (st != null) {
++      int sl = st.length;
++      stack = new String[sl];
++      for (int i = 0; i < sl; i++) {
++        stack[i] = st[i].toString();
++      }
++    } else {
++      stack = new String[0];
++    }
++    Throwable rootCause = thrown.getCause();
++    if (rootCause != null && rootCause != thrown) {
++      cause = new ThrowableWritable(rootCause);
++    }
++  }
++
++  /**
++   * Copy constructor.
++   *
++   * @param that the original instance to copy
++   */
++  public ThrowableWritable(ThrowableWritable that) {
++    classname = that.classname;
++    message = that.message;
++    //copy stack trace
++    if (that.stack == null) {
++      stack = new String[0];
++    } else {
++      int l = that.stack.length;
++      stack = new String[l];
++      System.arraycopy(that.stack, 0, stack, 0, l);
++    }
++    //copy any nested cause
++    if (that.cause != null) {
++      cause = new ThrowableWritable(that.cause);
++    }
++  }
++
++
++  /**
++   * Get the classname of the underlying throwable
++   *
++   * @return the classname of the original throwable
++   */
++  public String getClassname() {
++    return classname;
++  }
++
++  /**
++   * Get the text string this instance was constructed with
++   *
++   * @return the message of the underlying throwable
++   */
++  public String getMessage() {
++    return message;
++  }
++
++  /**
++   * Get any nested cause of the exception
++   *
++   * @return any nested cause as another ThrowableWritable -or null
++   */
++  public ThrowableWritable getCause() {
++    return cause;
++  }
++
++  /**
++   * Get the stack trace of the original throwable. It may be of size 0.
++   *
++   * @return the stack trace converted to strings
++   */
++  public String[] getStack() {
++    return stack;
++  }
++
++
++  /**
++   * determine (recursively) the depth of this Throwable chain
++   *
++   * @return a number equal to or greater than 1
++   */
++  public int getDepth() {
++    return 1 + (cause == null ? 0 : cause.getDepth());
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * @param out <code>DataOutput</code> to serialize this object into.
++   *
++   * @throws IOException IO trouble
++   */
++  public void write(DataOutput out) throws IOException {
++    out.writeUTF(classname);
++    out.writeUTF(message);
++    if (stack != null) {
++      out.writeInt(stack.length);
++      for (String call : stack) {
++        out.writeUTF(call);
++      }
++    } else {
++      out.writeInt(0);
++    }
++    //look for a cause
++    boolean hasCause = cause != null;
++    out.writeBoolean(hasCause);
++    if (hasCause) {
++      //recursively write it
++      cause.write(out);
++    }
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * @param in <code>DataInput</code> to deseriablize this object from.
++   *
++   * @throws IOException IO trouble
++   */
++  public void readFields(DataInput in) throws IOException {
++    classname = in.readUTF();
++    message = in.readUTF();
++    int stackLength = in.readInt();
++    if (stack == null || stack.length != stackLength) {
++      //create a new stack array
++      stack = new String[stackLength];
++    }
++    //read in the stack
++    for (int i = 0; i < stackLength; i++) {
++      stack[i] = in.readUTF();
++    }
++    //look for any nested cause
++    boolean hasCause = in.readBoolean();
++    if (hasCause) {
++      if (cause == null) {
++        cause = new ThrowableWritable();
++      }
++      cause.readFields(in);
++    }
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * @throws CloneNotSupportedException this should not happen
++   */
++  @SuppressWarnings({"CloneDoesntCallSuperClone"})
++  @Override
++  protected Object clone() throws CloneNotSupportedException {
++    return new ThrowableWritable(this);
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * The classname and message are used for equality
++   */
++  @Override
++  public boolean equals(Object o) {
++    if (this == o) {
++      return true;
++    }
++    if (o == null || getClass() != o.getClass()) {
++      return false;
++    }
++
++    ThrowableWritable that = (ThrowableWritable) o;
++
++    if (classname != null
++        ? !classname.equals(that.classname)
++        : that.classname != null) {
++      return false;
++    }
++    return !(message != null
++        ? !message.equals(that.message)
++        : that.message != null);
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * The classname and message are used in the hash
++   */
++  @Override
++  public int hashCode() {
++    int result = classname != null ? classname.hashCode() : 0;
++    result = 31 * result + (message != null ? message.hashCode() : 0);
++    return result;
++  }
++
++  /**
++   * Return the classname and message in the format classname: message The
++   * output is designed to resemble that of {@link Throwable#toString()} if the
++   * message and classname are both set. If only the message is set, only that
++   * is printed.
++   *
++   * @return a string representation of the object.
++   */
++  @Override
++  public String toString() {
++    StringBuilder builder = new StringBuilder();
++    if (classname != null) {
++      builder.append(classname);
++      if (!classname.isEmpty()) {
++        builder.append(": ");
++      }
++    }
++    if (message != null) {
++      builder.append(message);
++    }
++    return builder.toString();
++  }
++}
+diff --git a/src/java/org/apache/hadoop/ipc/Client.java b/src/java/org/apache/hadoop/ipc/Client.java
+index d16170c..cb2afcf 100644
+--- a/src/java/org/apache/hadoop/ipc/Client.java
++++ b/src/java/org/apache/hadoop/ipc/Client.java
+@@ -35,6 +35,7 @@ import java.io.BufferedOutputStream;
+ import java.io.FilterInputStream;
+ import java.io.InputStream;
+ import java.io.OutputStream;
++import java.io.InterruptedIOException;
+ 
+ import java.security.PrivilegedExceptionAction;
+ import java.util.Hashtable;
+@@ -633,7 +634,11 @@ public class Client {
+       // otherwise back off and retry
+       try {
+         Thread.sleep(1000);
+-      } catch (InterruptedException ignored) {}
++      } catch (InterruptedException interrupted) {
++        throw (IOException) new InterruptedIOException(
++            "Interrupted while waiting to retry connecting to "+ server)
++            .initCause(ioe);
++      }
+       
+       LOG.info("Retrying connect to server: " + server + 
+           ". Already tried " + curRetries + " time(s).");
+@@ -1083,6 +1088,8 @@ public class Client {
+       return (SocketTimeoutException)new SocketTimeoutException(
+            "Call to " + addr + " failed on socket timeout exception: "
+                       + exception).initCause(exception);
++    } else if (exception instanceof InterruptedIOException) {
++        return exception;
+     } else {
+       return (IOException)new IOException(
+            "Call to " + addr + " failed on local exception: " + exception)
+diff --git a/src/java/org/apache/hadoop/ipc/RPC.java b/src/java/org/apache/hadoop/ipc/RPC.java
+index b42b913..4945db7 100644
+--- a/src/java/org/apache/hadoop/ipc/RPC.java
++++ b/src/java/org/apache/hadoop/ipc/RPC.java
+@@ -292,12 +292,19 @@ public class RPC {
+       if (System.currentTimeMillis()-timeout >= startTime) {
+         throw ioe;
+       }
++      if (Thread.interrupted()) {
++        //interrupted during some IO; this may not have been caught
++        throw new InterruptedIOException(
++            "Interrupted waiting for the proxy");
++      }
+ 
+       // wait for retry
+       try {
+         Thread.sleep(1000);
+       } catch (InterruptedException ie) {
+-        // IGNORE
++        throw (IOException) new InterruptedIOException(
++            "Interrupted waiting for the proxy")
++            .initCause(ioe);
+       }
+     }
+   }
+diff --git a/src/java/org/apache/hadoop/net/SocketIOWithTimeout.java b/src/java/org/apache/hadoop/net/SocketIOWithTimeout.java
+index f48d2d2..f737d89 100644
+--- a/src/java/org/apache/hadoop/net/SocketIOWithTimeout.java
++++ b/src/java/org/apache/hadoop/net/SocketIOWithTimeout.java
+@@ -335,7 +335,13 @@ abstract class SocketIOWithTimeout {
+             return ret;
+           }
+           
+-          /* Sometimes select() returns 0 much before timeout for 
++          if (Thread.currentThread().isInterrupted()) {
++            throw new InterruptedIOException("Interrupted while waiting for " +
++                                             "IO on channel " + channel +
++                                             ". " + timeout +
++                                             " millis timeout left.");
++          }
++          /* Sometimes select() returns 0 much before timeout for
+            * unknown reasons. So select again if required.
+            */
+           if (timeout > 0) {
+@@ -345,12 +351,6 @@ abstract class SocketIOWithTimeout {
+             }
+           }
+           
+-          if (Thread.currentThread().isInterrupted()) {
+-            throw new InterruptedIOException("Interruped while waiting for " +
+-                                             "IO on channel " + channel +
+-                                             ". " + timeout + 
+-                                             " millis timeout left.");
+-          }
+         }
+       } finally {
+         if (key != null) {
+diff --git a/src/java/org/apache/hadoop/util/LifecycleService.java b/src/java/org/apache/hadoop/util/LifecycleService.java
+new file mode 100644
+index 0000000..dfa1074
+--- /dev/null
++++ b/src/java/org/apache/hadoop/util/LifecycleService.java
+@@ -0,0 +1,834 @@
++/*
++ * Copyright  2008 The Apache Software Foundation
++ *
++ *  Licensed under the Apache License, Version 2.0 (the "License");
++ *  you may not use this file except in compliance with the License.
++ *  You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *  Unless required by applicable law or agreed to in writing, software
++ *  distributed under the License is distributed on an "AS IS" BASIS,
++ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *  See the License for the specific language governing permissions and
++ *  limitations under the License.
++ *
++ */
++
++package org.apache.hadoop.util;
++
++import org.apache.hadoop.conf.Configured;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++import java.io.IOException;
++import java.io.Closeable;
++import java.io.InterruptedIOException;
++import java.util.Date;
++import java.util.List;
++import java.util.ArrayList;
++
++/**
++ * This is the base class for services that can be deployed. A service is any
++ * Hadoop class that has a standard lifecycle
++ *
++ * The lifecycle of a Service is:
++ *
++ * <ol>
++ *
++ * <li>Component is Created, enters the {@link ServiceState#CREATED} state.
++ * This happens in the constructor. </li>
++ *
++ * <li>Component is started  through a call to {@link LifecycleService#start()}. 
++ * If successful, it enters the {@link ServiceState#STARTED} state. 
++ * If not, it enters the {@link
++ * ServiceState#FAILED} state. </li>
++ *
++ * <li>Once the component considers itself live, it enters 
++ * the {@link ServiceState#LIVE} state. This implies it
++ * is providing a service to external callers. </li>
++ *
++ * </ol>
++ *
++ * From any state, the service can be terminated/closed through a call to
++ * {@link LifecycleService#close()}, which may throw an {@link IOException}, or
++ * {@link LifecycleService#closeQuietly()}, which catched and logs any such exception.
++ * These are idempotent calls, and will place the service in the
++ * {@link ServiceState#CLOSED}, terminated  state, after which
++ * it can no longer be used.
++ *
++ * To implement a Service.
++ *
++ * <ol>
++ *
++ * <li>Subclass this class</li>
++ *
++ * <li>Avoid doing any initialization/startup in the constructors, as this
++ * breaks the lifecycle and prevents subclassing. </li>
++ *
++ * <li>If the service wishes to declare itself as having failed, call
++ * {@link #enterFailedState(Throwable)} to enter the failed state.</li>
++ *
++ * <li>Override the {@link #serviceStart()} method to start the service, including
++ * starting any worker threads.</li>
++ *
++ * <li>In the {@link #serviceStart ()} method, if the service is immediately live
++ * to external callers, call {@link #enterLiveState()} to mark the service as
++ * live.</li>
++
++ * <li>If startup is performed in separate threads, and includes bootstrap work,
++ * call the  {@link #enterLiveState()} in the separate thread <i>when the
++ * service is ready</i></li>
++ *
++ * <li>Override {@link #serviceClose()} to perform all shutdown logic.
++ * Be robust here and shut down cleanly even if the service did not start up
++ * completely. Do not assume all fields are non-null</li>
++ *
++ *
++ * You should not need to worry about making these overridden methods
++ * synchronized, as they are only called when a service has entered a specific
++ * state -which is synchronized. 
++ * Each method will only be called at most once in the life of a service instance.
++ * However, because findbugs can flag synchronization warnings, it is often
++ * simplest and safest to mark the innerX operations as synchronized.
++ */
++
++public abstract class LifecycleService extends Configured implements Closeable {
++
++  private static final Log LOG = LogFactory.getLog(LifecycleService.class);
++
++  /**
++   * The initial state of a service is {@link ServiceState#CREATED}
++   */
++  private volatile ServiceState serviceState = ServiceState.CREATED;
++
++  /**
++   * when did the state change?
++   */
++  private volatile Date lastStateChange = new Date();
++
++  /**
++   * A root cause for failure. May be null.
++   */
++  private Throwable failureCause;
++
++  /**
++   * State change listeners
++   */
++  private List<StateChangeListener> stateListeners;
++
++  /**
++   * Error string included in {@link StateException} exceptions
++   * when an operation is applied to a service that is not in the correct
++   * state for it.
++   * value: {@value}
++   */
++  public static final String ERROR_WRONG_STATE = " is in the wrong state.";
++
++  /**
++   * Error string included in {@link StateException} exceptions
++   * when a service with a null configuration is started
++   * value: {@value}
++   */
++  public static final String ERROR_NO_CONFIGURATION
++          = "Cannot initialize no Configuration has been provided";
++
++  /**
++   * Construct a service with no configuration; one must be called with {@link
++   * #setConf(Configuration)} before the service is started
++   */
++  protected LifecycleService() {
++  }
++
++  /**
++   * Construct a Configured service
++   *
++   * @param conf the configuration
++   */
++  protected LifecycleService(Configuration conf) {
++    super(conf);
++  }
++
++    /**
++   * Start any work (usually in separate threads).
++   *
++   * When successful, the service will be in the {@link ServiceState#STARTED}
++   * state, or may have already transited to the {@link ServiceState#LIVE}
++   * state
++   *
++   * When unsuccessful, the service will have entered the FAILED state and
++   * then attempted to close down.
++   * Subclasses must implement their work in {@link #serviceStart()}, leaving the
++   * start() method to manage state checks and changes.
++   * 
++   *
++   * @throws IOException           for any failure
++   * @throws StateException when the service is not in a state from which
++   *                               it can enter this state.
++   * @throws InterruptedException if the thread was interrupted on startup
++   */
++  public final void start() throws IOException, InterruptedException {
++    synchronized (this) {
++      //this request is idempotent on either live or starting states; either
++      //state is ignored
++      ServiceState currentState = getServiceState();
++      if (currentState == ServiceState.LIVE ||
++              currentState == ServiceState.STARTED) {
++        return;
++      }
++      //sanity check: make sure that we are configured
++      if (getConf() == null) {
++        throw new StateException(ERROR_NO_CONFIGURATION,
++                getServiceState());
++      }
++      //check and change states
++      enterState(ServiceState.STARTED);
++    }
++    try {
++      serviceStart();
++    } catch (IOException e) {
++      enterFailedState(e);
++      throw e;
++    } catch (InterruptedException e) {
++      //interruptions mean "stop trying to start the service"
++      enterFailedState(e);
++      throw e;
++    }
++  }
++
++
++  /**
++   * Convert any exception to an {@link IOException}
++   * If it already is an IOException, the exception is
++   * returned as is. If it is anything else, it is wrapped, with
++   * the original message retained.
++   * @param thrown the exception to forward
++   * @return an IOException representing or containing the forwarded exception
++   */
++  protected static IOException forwardAsIOException(Throwable thrown) {
++    IOException newException;
++    if(thrown instanceof IOException) {
++      newException = (IOException) thrown;
++    } else {
++      IOException ioe;
++      //now handle as an interrupted exception or an IOE
++      if (thrown instanceof InterruptedException) {
++        ioe = new InterruptedIOException(thrown.toString());
++      } else {
++        ioe = new IOException(thrown.toString());
++      }
++      ioe.initCause(thrown);
++      newException = ioe;
++    }
++    return newException;
++  }
++
++  /**
++   * Test for a service being in the {@link ServiceState#LIVE} or {@link
++   * ServiceState#STARTED}
++   *
++   * @return true if the service is in the startup or live states.
++   */
++  public final boolean isRunning() {
++    ServiceState currentState = getServiceState();
++    return currentState == ServiceState.STARTED
++            || currentState == ServiceState.LIVE;
++  }
++
++  /**
++   * Shut down. This must be idempotent and turn errors into log/warn events -do
++   * your best to clean up even in the face of adversity. This method should be
++   * idempotent; if already terminated, return. Similarly, do not fail if the
++   * component never actually started.
++   *
++   * The implementation calls {@link #close()} and then
++   * {@link #logExceptionDuringQuietClose(Throwable)} if that method throws
++   * any exception.
++   */
++  public final void closeQuietly() {
++    try {
++      close();
++    } catch (Throwable e) {
++      logExceptionDuringQuietClose(e);
++    }
++  }
++
++  /**
++   * Closes this service. Subclasses are free to throw an exception, but
++   * they are expected to make a best effort attempt to close the service
++   * down as thoroughly as possible.
++   *
++   * @throws IOException if an I/O error occurs
++   */
++  public final void close() throws IOException {
++    if (enterState(ServiceState.CLOSED)) {
++      serviceClose();
++    }
++  }
++
++  /**
++   * This is a method called when exceptions are being logged and swallowed
++   * during termination. It logs the event at the error level.
++   *
++   * Subclasses may override this to do more advanced error handling/logging.
++   *
++   * @param thrown whatever was thrown
++   */
++  protected void logExceptionDuringQuietClose(Throwable thrown) {
++    LOG.error("Exception during termination: " + thrown,
++            thrown);
++  }
++
++  /**
++   * This method is designed for overriding, with subclasses implementing
++   * startup logic inside it. It is only called when the component is entering
++   * the running state; and will be called once only.
++   *
++   * One exception: subclasses should invoke their parent's serviceStart() if they
++   * subclass this method.
++   * 
++   * When the work in here is completed, the component should set the service
++   * state to {@link ServiceState#LIVE} when the service goes live.
++   *
++   * @throws IOException for any problem.
++   * @throws InterruptedException if the thread was interrupted on startup
++   */
++  protected void serviceStart() throws IOException, InterruptedException {
++  }
++
++  /**
++   * This method is designed for overriding, with subclasses implementing
++   * termination logic inside it.
++   *
++   * It is only called when the component is entering the closed state; and
++   * will be called once only.
++   *
++   * @throws IOException exceptions which will be logged
++   */
++  protected void serviceClose() throws IOException {
++
++  }
++
++  /**
++   * Get the current state of the service.
++   *
++   * @return the lifecycle state
++   */
++  public final ServiceState getServiceState() {
++    return serviceState;
++  }
++
++  /**
++   * This is the state transition graph represented as some nested switches.
++   * @return true if the transition is valid. For all states, the result when
++   * oldState==newState is false: that is not a transition, after all.
++   * @param oldState the old state of the service
++   * @param newState the new state
++   */
++  protected final boolean isValidStateTransition(ServiceState oldState,
++                                           ServiceState newState) {
++    switch(oldState) {
++      case CREATED:
++        switch(newState) {
++          case STARTED:
++          case FAILED:
++          case CLOSED:
++            return true;
++          default:
++            return false;
++        }
++      case STARTED:
++        switch (newState) {
++          case LIVE:
++          case FAILED:
++          case CLOSED:
++            return true;
++          default:
++            return false;
++        }
++      case LIVE:
++        switch (newState) {
++          case STARTED:
++          case FAILED:
++          case CLOSED:
++            return true;
++          default:
++            return false;
++        }
++      case UNDEFINED:
++        //if we don't know where we were before (very, very unlikely), then
++        //let's get out of it
++        return true;
++      case FAILED:
++        //failure can only enter closed state
++        return newState == ServiceState.CLOSED;
++      case CLOSED:
++        //This is the end state. There is no exit.
++      default:
++        return false;
++    }
++  }
++
++  /**
++  * Set the service state.
++  * If there is a change in state, the {@link #lastStateChange} timestamp
++  * is updated and the {@link #onStateChange(ServiceState, ServiceState)} event
++  * is invoked.
++  * @param serviceState the new state
++  */
++  protected final void setServiceState(ServiceState serviceState) {
++    ServiceState oldState;
++    synchronized (this) {
++      oldState = this.serviceState;
++      this.serviceState = serviceState;
++    }
++    if (oldState != serviceState) {
++      lastStateChange = new Date();
++      onStateChange(oldState, serviceState);
++    }
++  }
++
++
++
++  /**
++   * When did the service last change state
++   * @return the last state change of this service
++   */
++  public final Date getLastStateChange() {
++    return lastStateChange;
++  }
++
++  /**
++   * Enter a new state if that is permitted from the current state.
++   * Does nothing if we are in that state; throws an exception if the
++   * state transition is not permitted
++   * @param  newState  the new state
++   * @return true if the service transitioned into this state, that is, it was
++   *         not already in the state
++   * @throws StateException if the service is not in either state
++   */
++  protected final synchronized boolean enterState(ServiceState newState)
++          throws StateException {
++    return enterState(getServiceState(), newState);
++  }
++
++  /**
++   * Check that a service is in a required entry state, or already in the
++   * desired exit state.
++   *
++   * @param entryState the state that is needed. If set to {@link
++   *                   ServiceState#UNDEFINED} then the entry state is not
++   *                   checked.
++   * @param exitState  the state that is desired when we exit
++   * @return true if the service transitioned into this state, that is, it was
++   *         not already in the state
++   * @throws StateException if the service is not in either state
++   */
++  protected final synchronized boolean enterState(ServiceState entryState,
++                                            ServiceState exitState)
++          throws StateException {
++    ServiceState currentState = getServiceState();
++    if (currentState == exitState) {
++      return false;
++    }
++    validateStateTransition(entryState, exitState);
++    setServiceState(exitState);
++    return true;
++  }
++
++  /**
++   * Check that the state transition is valid
++   * @param entryState the entry state
++   * @param exitState the exit state 
++   * @throws StateException if the state transition is not allowed
++   */
++  protected final void validateStateTransition(ServiceState entryState,
++                                         ServiceState exitState)
++          throws StateException {
++    if(!isValidStateTransition(entryState, exitState)) {
++      throw new StateException(toString()
++              + ERROR_WRONG_STATE
++              + " The service cannot move from the state " + entryState
++              + "to the state " + exitState,
++              entryState);
++    }
++  }
++
++  /**
++   * Verify that a service is in a specific state
++   *
++   * @param state the state that is required.
++   * @throws StateException if the service is in the wrong state
++   */
++  public final void verifyServiceState(ServiceState state)
++          throws StateException {
++    verifyState(getServiceState(), state, ServiceState.UNDEFINED);
++  }
++
++  /**
++   * Verify that a service is in either of two specific states
++   *
++   * @param expected  the state that is expected.
++   * @param expected2 a second state, which can be left at {@link
++   *                  ServiceState#UNDEFINED} for "do not check this"
++   * @throws StateException if the service is in the wrong state
++   */
++  public final void verifyServiceState(ServiceState expected, ServiceState expected2)
++          throws StateException {
++    verifyState(getServiceState(), expected, expected2);
++  }
++
++  /**
++   * Internal state verification test
++   *
++   * @param currentState the current state
++   * @param expected     the state that is expected.
++   * @param expected2    a second state, which can be left at {@link
++   *                     ServiceState#UNDEFINED} for "do not check this"
++   * @throws StateException if the service is in the wrong state
++   */
++  protected final void verifyState(ServiceState currentState,
++                             ServiceState expected,
++                             ServiceState expected2)
++          throws StateException {
++    boolean expected2defined = expected2 != ServiceState.UNDEFINED;
++    if (!(currentState == expected ||
++            (expected2defined && currentState == expected2))) {
++      throw new StateException(toString()
++              + ERROR_WRONG_STATE
++              + " Expected " + expected
++              + (expected2defined ? (" or " + expected2) : " ")
++              + " but the actual state is " + currentState,
++              currentState);
++    }
++  }
++
++  /**
++   * Helper method to enter the {@link ServiceState#FAILED} state.
++   *
++   * Call this whenever the service considers itself to have failed in a
++   * non-restartable manner.
++   *
++   * If the service was already terminated or failed, this operation does
++   * not trigger a state change.
++   * @param cause the cause of the failure
++   */
++  public final void enterFailedState(Throwable cause) {
++    synchronized (this) {
++      if(failureCause == null) {
++        failureCause = cause;
++      }
++    }
++    if(!isTerminated()) {
++      setServiceState(ServiceState.FAILED);
++    }
++  }
++
++
++  /**
++   * Shortcut method to enter the {@link ServiceState#LIVE} state.
++   *
++   * Call this when a service considers itself live
++   * @return true if this state was entered, false if it was already in it
++   * @throws StateException if the service is not currently in the
++   * STARTED or LIVE states
++   */
++  protected final boolean enterLiveState() throws StateException {
++    return enterState(ServiceState.LIVE);
++  }
++
++  /**
++   * Test for the service being terminated; non-blocking
++   *
++   * @return true if the service is currently terminated
++   */
++  public boolean isTerminated() {
++    return getServiceState() == ServiceState.CLOSED;
++  }
++
++
++  /**
++   * Override point: the name of this service. This is used
++   * to construct human-readable descriptions
++   * @return the name of this service for string messages
++   */
++  public String getServiceName() {
++    return "Service";
++  }
++
++  /**
++  * The toString operator returns the super class name/id, and the state. This
++  * gives all services a slightly useful message in a debugger or test report
++  *
++  * @return a string representation of the object.
++  */
++  @Override
++  public String toString() {
++    return getServiceName() + " instance " + super.toString() + " in state "
++            + getServiceState();
++  }
++
++
++  /**
++   * Get the cause of failure -will be null if not failed, and may be
++   * null even after failure.
++   * @return the exception that triggered entry into the failed state.
++   *
++   */
++  public Throwable getFailureCause() {
++    return failureCause;
++  }
++
++  /**
++   * Initialize and start a service. If the service fails to come up, it is
++   * terminated.
++   *
++   * @param service the service to deploy
++   * @throws IOException on any failure to deploy
++   */
++  public static void startService(LifecycleService service)
++          throws IOException {
++    //reject a null argument without complicating things
++    if (service == null) {
++      throw new NullPointerException();
++    }
++    try {
++      service.start();
++    } catch (IOException e) {
++      //mark as failed
++      service.enterFailedState(e);
++      //we assume that the service really does know how to terminate
++      service.closeQuietly();
++      throw e;
++    } catch (Throwable t) {
++      //mark as failed
++      service.enterFailedState(t);
++      //we assume that the service really does know how to terminate
++      service.closeQuietly();
++      throw forwardAsIOException(t);
++    }
++  }
++
++  /**
++   * Terminate a service that is not null, by calling its {@link #closeQuietly()} method
++   *
++   * @param service a service to terminate
++   */
++  public static void closeQuietly(LifecycleService service) {
++    if (service != null) {
++      service.closeQuietly();
++    }
++  }
++
++  /**
++   * Terminate a service or other closeable that is not null
++   *
++   * @param closeable the object to close
++   */
++  public static void close(Closeable closeable) {
++    if (closeable != null) {
++      try {
++        closeable.close();
++      } catch (IOException e) {
++        LOG.info("when closing :" + closeable+ ":" + e, e);
++      }
++    }
++  }
++
++  /**
++   * Override point - a method called whenever there is a state change.
++   *
++   * The base class logs the event and notifies all state change listeners.
++   *
++   * @param oldState existing state
++   * @param newState new state.
++   */
++  protected void onStateChange(ServiceState oldState,
++                               ServiceState newState) {
++    if (LOG.isDebugEnabled()) {
++      LOG.debug("State Change: " + toString()
++              + " transitioned from state " + oldState + " to " + newState);
++    }
++    
++    //copy all the listeners out of the list
++    //this is to give us access to an unsynchronized copy of the listeners, which
++    //can then have the state notifications called outside of any synchronized 
++    //sectoin
++    StateChangeListener[] listeners = null;
++    synchronized (this) {
++      if (stateListeners != null) {
++        listeners = new StateChangeListener[stateListeners
++                .size()];
++        stateListeners.toArray(listeners);
++      } else {
++        //no listeners, exit here
++        return;
++      }
++    }
++    // issue the notifications
++    for (StateChangeListener listener : listeners) {
++      listener.onStateChange(this, oldState, newState);
++    }
++  }
++
++  /**
++   * Add a new state change listener
++   * @param listener a new state change listener
++   */
++  public synchronized void addStateChangeListener(StateChangeListener listener) {
++    if (stateListeners == null) {
++      stateListeners = new ArrayList<StateChangeListener>(1);
++    }
++    stateListeners.add(listener);
++  }
++
++  /**
++   * Remove a state change listener. This is an idempotent operation; it is 
++   * not an error to attempt to remove a listener which is not present
++   * @param listener a state change listener
++   */
++  public synchronized void removeStateChangeListener(StateChangeListener listener) {
++    if (stateListeners != null) {
++      stateListeners.remove(listener);
++    }
++  }
++
++
++  /**
++   * An exception that indicates there is something wrong with the state of the
++   * service
++   */
++  public static class StateException extends IOException {
++    private ServiceState state;
++
++
++    /**
++     * Create a service state exception with a standard message {@link
++     * LifecycleService#ERROR_WRONG_STATE} including the string value of the owning
++     * service, and the supplied state value
++     *
++     * @param service owning service
++     * @param state current state
++     */
++    public StateException(LifecycleService service, ServiceState state) {
++      this(service.toString()
++              + ERROR_WRONG_STATE + " : " + state,
++              null,
++              state);
++    }
++
++    /**
++     * Constructs an Exception with the specified detail message and service
++     * state.
++     *
++     * @param message The detail message (which is saved for later retrieval by
++     *                the {@link #getMessage()} method)
++     * @param state   the current state of the service
++     */
++    public StateException(String message, ServiceState state) {
++      this(message, null, state);
++    }
++
++    /**
++     * Constructs an Exception with the specified detail message, cause and
++     * service state.
++     *
++     * @param message message
++     * @param cause   optional root cause
++     * @param state   the state of the component
++     */
++    public StateException(String message,
++                                 Throwable cause,
++                                 ServiceState state) {
++      super(message, cause);
++      this.state = state;
++    }
++
++    /**
++     * Construct an exception. The lifecycle state of the specific component is
++     * extracted
++     *
++     * @param message message
++     * @param cause   optional root cause
++     * @param service originating service
++     */
++    public StateException(String message,
++                                 Throwable cause,
++                                 LifecycleService service) {
++      this(message, cause, service.getServiceState());
++    }
++
++    /**
++     * Get the state when this exception was raised
++     *
++     * @return the state of the service
++     */
++    public ServiceState getState() {
++      return state;
++    }
++
++
++  }
++
++  /**
++   * The state of the service as perceived by the service itself. Failure is the
++   * odd one as it often takes a side effecting test (or an outsider) to
++   * observe.
++   */
++  public enum ServiceState {
++    /**
++     * we don't know or care what state the service is in
++     */
++    UNDEFINED,
++    /**
++     * The service has been created
++     */
++    CREATED,
++
++    /**
++     * The service is starting up.
++     * Its {@link LifecycleService#start()} method has been called.
++     * When it is ready for work, it will declare itself LIVE.
++     */
++    STARTED,
++    
++    /**
++     * The service is now live and available for external use
++     */
++    LIVE,
++    
++    /**
++     * The service has failed
++     */
++    FAILED,
++
++    /**
++     * the service has been shut down
++     * The container process may now destroy the instance
++     * Its {@link LifecycleService#close()} ()} method has been called.
++     */
++    CLOSED
++  }
++
++    /**
++     * This is the interface that state change listeners must implement; 
++     * when registered they will be notified after a service has changed state
++     * (in the same thread as the service itself).
++     */
++  public interface StateChangeListener {
++    
++    /**
++     * This method is called for any listener. 
++     *
++     * The base class logs the event.
++     * @param service the service whose state is changing
++     * @param oldState existing state
++     * @param newState new state.
++     */
++    void onStateChange(LifecycleService service, 
++                       ServiceState oldState,
++                       ServiceState newState);
++
++  }
++}
+diff --git a/src/java/org/apache/hadoop/util/LifecycleServiceWithWorkers.java b/src/java/org/apache/hadoop/util/LifecycleServiceWithWorkers.java
+new file mode 100644
+index 0000000..dc0f9dd
+--- /dev/null
++++ b/src/java/org/apache/hadoop/util/LifecycleServiceWithWorkers.java
+@@ -0,0 +1,46 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++package org.apache.hadoop.util;
++
++import org.apache.hadoop.conf.Configuration;
++
++/**
++ * This is a class to use for Hadoop services which have workers; 
++ * methods specific to listing, counting and managing  workers can be added here.
++ */
++public abstract class LifecycleServiceWithWorkers extends LifecycleService {
++
++  protected LifecycleServiceWithWorkers() {
++  }
++
++  protected LifecycleServiceWithWorkers(Configuration conf) {
++    super(conf);
++  }
++
++
++  /**
++   * Get the current number of workers
++   *
++   * @return the worker count
++   */
++
++  public abstract int getLiveWorkerCount();
++
++}
+diff --git a/src/java/org/apache/hadoop/util/MockLifecycleService.java b/src/java/org/apache/hadoop/util/MockLifecycleService.java
+new file mode 100644
+index 0000000..df40ffc
+--- /dev/null
++++ b/src/java/org/apache/hadoop/util/MockLifecycleService.java
+@@ -0,0 +1,192 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.util;
++
++import org.apache.hadoop.conf.Configuration;
++
++import java.io.IOException;
++
++/**
++ * A mock service that can be set to fail in different parts of its lifecycle,
++ * and which counts the number of times its inner classes changed state.
++ * 
++ * It follows all the lifecycle state rules of the base class, and even claims
++ * to offer a worker count for the curious caller (always 0), but can be 
++ * configured to fail and delay for a configurable period of time on startup
++ * 
++ */
++
++public class MockLifecycleService extends LifecycleServiceWithWorkers {
++
++  /**
++   * Build from an empty configuration
++   */
++  public MockLifecycleService() {
++    super(new Configuration());
++  }
++
++  /**
++   * Build from a configuration file
++   * @param conf configuration
++   */
++  public MockLifecycleService(Configuration conf) {
++    super(conf);
++  }
++
++  private boolean failOnStart, failOnClose;
++  private boolean goLiveInStart = true;
++  private int startupDelay;
++  private boolean closed = true;
++  private volatile int stateChangeCount = 0;
++
++  public void setFailOnStart(boolean failOnStart) {
++    this.failOnStart = failOnStart;
++  }
++
++  public void setGoLiveInStart(boolean goLiveInStart) {
++    this.goLiveInStart = goLiveInStart;
++  }
++
++  public void setFailOnClose(boolean failOnClose) {
++    this.failOnClose = failOnClose;
++  }
++
++  public void setStartupDelay(int startupDelay) {
++    this.startupDelay = startupDelay;
++  }
++
++  public boolean isClosed() {
++    return closed;
++  }
++
++  /**
++   * Go live
++   *
++   * @throws StateException if we were not in a state to do so
++   */
++  public void goLive() throws StateException {
++    enterLiveState();
++  }
++
++  /**
++   * {@inheritDoc}
++   * @throws IOException  if {@link #failOnStart is set}
++   * @throws InterruptedException if the service was to delay its startup, and it
++   * was interrupted
++   */
++  @Override
++  protected void serviceStart() throws IOException, InterruptedException {
++    if (failOnStart) {
++      throw new MockServiceException("failOnStart");
++    }
++    if (startupDelay > 0) {
++      Thread.sleep(startupDelay);
++    }
++    if (goLiveInStart) {
++      goLive();
++    }
++  }
++
++  /**
++   * {@inheritDoc}
++   *
++   * @throws IOException if {@link #failOnClose} is true
++   */
++  protected void serviceClose() throws IOException {
++    closed = true;
++    if (failOnClose) {
++      throw new MockServiceException("failOnClose");
++    }
++  }
++
++
++  /**
++   * Get the current number of workers
++   * @return 0, always
++   */
++  @Override //LifecycleServiceWithWorkers
++  public int getLiveWorkerCount() {
++    return 0;
++  }
++  
++  /**
++   * {@inheritDoc}
++   */
++  @Override
++  protected void onStateChange(ServiceState oldState,
++                               ServiceState newState) {
++    super.onStateChange(oldState, newState);
++    stateChangeCount++;
++  }
++
++  /**
++   * A public back-door method do change the service state. This bypasses
++   * the state model controls, and is there
++   * @param state the new state
++   */
++  public void changeState(ServiceState state) {
++    setServiceState(state);
++  }
++
++  /**
++   * Get the number of state changes seen
++   * @return the number of state changes after creation.
++   */
++  public int getStateChangeCount() {
++    return stateChangeCount;
++  }
++
++
++  /**
++   * An exception to indicate we have triggered a mock event
++   */
++  public static class MockServiceException extends IOException {
++
++    public MockServiceException(String message) {
++      super(message);
++    }
++  }
++
++  /**
++   * To test lifecycle events, counts up every time something happens
++   */
++  public static class LifecycleEventCount implements StateChangeListener {
++    private int count = 0;
++
++    /**
++     * Increment the counter.
++     * @param service the service whose state is changing
++     * @param oldState existing state
++     * @param newState new state.
++     */
++    @Override
++    public synchronized void onStateChange(LifecycleService service, 
++                                           ServiceState oldState,
++                                           ServiceState newState) {
++      count++;
++    }
++
++    /**
++     * Get the counter; access is synchronised.
++     * @return the current value of the counter
++     */
++    public synchronized int getCount() {
++      return count;
++    }
++  }
++}
+diff --git a/src/test/core/org/apache/hadoop/io/TestThrowableWritable.java b/src/test/core/org/apache/hadoop/io/TestThrowableWritable.java
+new file mode 100644
+index 0000000..0c50ed3
+--- /dev/null
++++ b/src/test/core/org/apache/hadoop/io/TestThrowableWritable.java
+@@ -0,0 +1,243 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.io;
++
++import junit.framework.Assert;
++import org.junit.BeforeClass;
++import org.junit.Test;
++
++import java.io.IOException;
++
++/**
++ * Test that the {@link ThrowableWritable} class works as intended:
++ * that it can be used to serialize an exception chain, and that
++ * that result is retained.
++ * <p/>
++ * <i>Important</i>: if the class is renamed, the constant
++ * {@link #CLASSNAME} must be changed too.
++ */
++public class TestThrowableWritable extends Assert {
++
++  /**
++   * This is our classname, looked for in stack traces.
++   * <i>Important</i>: if the class is renamed, this constant must be changed too.
++   */
++  private static final String CLASSNAME = "TestThrowableWritable";
++
++  private static ThrowableWritable simple, messageOnly, chained, empty;
++  private static final String SIMPLE = "simple";
++  private static final String MESSAGE_ONLY = "messageOnly";
++  private static final String OUTER = "outer";
++  private static final String INNER = "inner";
++
++  public TestThrowableWritable() {
++  }
++
++  /**
++   * {@inheritDoc}
++   */
++  @BeforeClass
++  public static void beforeClass() throws Exception {
++
++    simple = new ThrowableWritable(new Throwable(SIMPLE));
++    messageOnly = new ThrowableWritable(MESSAGE_ONLY);
++    empty = new ThrowableWritable();
++    Throwable thrown = new Throwable(OUTER,
++                                     new IOException(INNER));
++    chained = new ThrowableWritable(thrown);
++  }
++
++  /**
++   *
++   * @param instance ThrowableWritable to check
++   */
++  private void assertEmptyStack(ThrowableWritable instance) {
++    assertNotNull(instance);
++    assertEquals(0, instance.getStack().length);
++  }
++
++  /**
++   * Test that copy and cloning works
++   * @param instance ThrowableWritable to check
++   * @throws CloneNotSupportedException if cloning fails
++   */
++  private void assertCopyWorks(ThrowableWritable instance) throws CloneNotSupportedException {
++    assertNotNull(instance);
++    Object cloned = instance.clone();
++    ThrowableWritable copy = new ThrowableWritable(instance);
++    assertEquals(cloned, copy);
++    assertEquals(instance, copy);
++    assertEquals(instance.hashCode(), copy.hashCode());
++    assertEquals(instance.getDepth(), copy.getDepth());
++  }
++
++  /**
++   * Assert that there is a stack in the ThrowableWritable, and that it has at
++   * least one entry, containing this test class's classname.
++   * @param instance ThrowableWritable to check
++   */
++  private void assertStackSetUp(ThrowableWritable instance) {
++    assertNotNull(instance);
++    assertTrue(instance.getStack().length > 0);
++    String topEntry = instance.getStack()[0];
++    assertTrue("No stack in " + topEntry,
++               topEntry.contains(CLASSNAME));
++  }
++
++  /**
++   * Assert that the message in a ThrowableWritable matches exactly the message
++   * expected
++   * @param message expected message
++   * @param instance ThrowableWritable to check
++   */
++  private void assertMessageEquals(String message, ThrowableWritable instance) {
++    assertNotNull(instance);
++    assertEquals(message, instance.getMessage());
++  }
++
++  /**
++   * Assert that the depth fo an instance
++   * @param depth
++   * @param instance ThrowableWritable to check
++   */
++  private void assertDepth(int depth, ThrowableWritable instance) {
++    assertNotNull(instance);
++    assertEquals(depth, instance.getDepth());
++  }
++
++  /**
++   * Assert that at a classname is the classname field of a ThrowableWritable
++   * @param classname part of a classname to look for
++   * @param instance the instance which must not be null, or have a null classname field
++   */
++  private void assertClassnameContains(String classname, ThrowableWritable instance) {
++    assertNotNull(instance);
++    assertNotNull(instance.getClassname());
++    assertContains(classname, instance.getClassname());
++  }
++
++  /**
++   * Assert that the expected string is in the source text
++   * @param expected string to look for
++   * @param source source string -must not be null
++   */
++  private void assertContains(String expected, String source) {
++    assertNotNull(source);
++    assertTrue("Did not find " + expected + " in " + source, source.contains(expected));
++  }
++
++  /**
++   * Close any non-null closeable item
++   * @param closeable something to close -can be null
++   * @throws IOException if the close went wrong
++   */
++  private void close(java.io.Closeable closeable) throws IOException {
++    if (closeable != null) {
++      closeable.close();
++    }
++  }
++
++  /**
++   * assertion: check that can write and then read a source
++   *
++   * @param source any writable source
++   * @throws IOException on IO problems
++   */
++  private void assertRoundTrips(Writable source) throws IOException {
++    DataOutputBuffer out = null;
++    DataInputBuffer in = null;
++    ThrowableWritable dest;
++    try {
++      out = new DataOutputBuffer();
++      in = new DataInputBuffer();
++      out.reset();
++      source.write(out);
++      in.reset(out.getData(), out.getLength());
++      dest = new ThrowableWritable();
++      dest.readFields(in);
++    } finally {
++      close(in);
++      close(out);
++    }
++    assertEquals(source, dest);
++  }
++
++  /**
++   * Test case
++   *
++   * @throws Throwable on any failure
++   */
++  @Test
++  public void testEmptyInstance() throws Throwable {
++    assertNotNull(empty.toString());
++    assertNull(empty.getClassname());
++    assertEquals(empty, empty);
++    assertNull(empty.getMessage());
++    assertCopyWorks(empty);
++    assertDepth(1, empty);
++  }
++
++  /**
++   * Test case
++   *
++   * @throws Throwable on any failure
++   */
++  @Test
++  public void testSimple() throws Throwable {
++    assertMessageEquals(SIMPLE, simple);
++    assertClassnameContains("Throwable", simple);
++    assertStackSetUp(simple);
++    assertDepth(1, simple);
++    assertCopyWorks(simple);
++    assertRoundTrips(simple);
++  }
++
++  /**
++   * Test case
++   *
++   * @throws Throwable on any failure
++   */
++  @Test
++  public void testMessageOnly() throws Throwable {
++    assertMessageEquals(MESSAGE_ONLY, messageOnly);
++    assertEmptyStack(messageOnly);
++    assertDepth(1, messageOnly);
++    assertCopyWorks(messageOnly);
++    assertRoundTrips(messageOnly);
++  }
++
++  /**
++   * Test case: check that chained throwables can be written/read
++   *
++   * @throws Throwable on any failure
++   */
++  @Test
++  public void testChained() throws Throwable {
++    assertContains(OUTER, chained.toString());
++    assertClassnameContains("Throwable", chained);
++    assertStackSetUp(chained);
++    assertDepth(2, chained);
++    assertCopyWorks(chained);
++    ThrowableWritable cause = chained.getCause();
++    assertContains(INNER, cause.toString());
++    assertClassnameContains("IOException", cause);
++    assertRoundTrips(chained);
++  }
++
++}
+diff --git a/src/test/core/org/apache/hadoop/ipc/TestRPCWaitForProxy.java b/src/test/core/org/apache/hadoop/ipc/TestRPCWaitForProxy.java
+new file mode 100644
+index 0000000..54a5c15
+--- /dev/null
++++ b/src/test/core/org/apache/hadoop/ipc/TestRPCWaitForProxy.java
+@@ -0,0 +1,110 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.ipc;
++
++import junit.framework.Assert;
++import org.junit.Test;
++import org.apache.hadoop.net.NetUtils;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++import java.net.InetSocketAddress;
++import java.net.ConnectException;
++import java.io.IOException;
++import java.io.InterruptedIOException;
++
++/**
++ * tests that the proxy can be interrupted
++ */
++public class TestRPCWaitForProxy extends Assert {
++  private static final String ADDRESS = "0.0.0.0";
++
++  private static final Log LOG =
++      LogFactory.getLog(TestRPCWaitForProxy.class);
++
++  private static Configuration conf = new Configuration();
++
++  /**
++   * This tests that the time-bounded wait for a proxy operation works, and
++   * times out.
++   * @throws Throwable any exception other than that which was expected
++   */
++  @Test
++  public void testWaitForProxy() throws Throwable {
++    RpcThread worker = new RpcThread(0);
++    worker.start();
++    worker.join();
++    Throwable caught = worker.getCaught();
++    assertNotNull("No exception was raised", caught);
++    if (!(caught instanceof ConnectException)) {
++      throw caught;
++    }
++
++  }
++
++  /**
++   * This test sets off a blocking thread and then interrupts it, before
++   * checking that the thread was interrupted
++   * @throws Throwable any exception other than that which was expected
++   */
++  @Test
++  public void testInterruptedWaitForProxy() throws Throwable {
++    RpcThread worker = new RpcThread(10000);
++    worker.start();
++    worker.interrupt();
++    worker.join();
++    Throwable caught = worker.getCaught();
++    assertNotNull("No exception was raised", caught);
++    if (!(caught instanceof InterruptedIOException)) {
++      throw caught;
++    }
++  }
++
++
++  /**
++   * This thread waits for a proxy for the specified timeout, and retains
++   * any throwable that was raised in the process
++   */
++
++  private class RpcThread extends Thread {
++    private Throwable caught;
++    private long timeout;
++
++    private RpcThread(long timeout) {
++      this.timeout = timeout;
++    }
++
++    @Override
++    public void run() {
++      try {
++        RPC.waitForProxy(TestRPC.TestProtocol.class,
++                         TestRPC.TestProtocol.versionID,
++                         new InetSocketAddress(ADDRESS, 20),
++                         conf,
++                         timeout);
++      } catch (Throwable throwable) {
++        caught = throwable;
++      }
++    }
++
++    public Throwable getCaught() {
++      return caught;
++    }
++  }
++}
+diff --git a/src/test/core/org/apache/hadoop/util/TestLifecycleService.java b/src/test/core/org/apache/hadoop/util/TestLifecycleService.java
+new file mode 100644
+index 0000000..8ef0600
+--- /dev/null
++++ b/src/test/core/org/apache/hadoop/util/TestLifecycleService.java
+@@ -0,0 +1,556 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.util;
++
++
++import java.io.IOException;
++
++import org.junit.Test;
++import org.junit.Assert;
++import org.junit.Before;
++import org.junit.After;
++
++
++/**
++ * Test the {@link LifecycleService} methods and service state transition model
++ * using a mock service which will count the number of state transitions, 
++ * and can be set to fail in different places.
++ */
++
++public class TestLifecycleService extends Assert {
++  private MockLifecycleService mockService;
++  private MockLifecycleService.LifecycleEventCount counter;
++
++  public TestLifecycleService() {
++  }
++
++  /**
++   * Create a mock service
++   * @throws Exception for API compatibility
++   */
++  @Before
++  public void setUp() throws Exception {
++    mockService = new MockLifecycleService();
++    counter = new MockLifecycleService.LifecycleEventCount();
++    mockService.addStateChangeListener(counter);
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    LifecycleService.close(mockService);
++    mockService = null;
++  }
++
++  /**
++   * Start the mock service
++   * @throws IOException on IO problems
++   * @throws InterruptedException if interrupted
++   */
++  private void start() throws IOException, InterruptedException {
++    assertServiceNotNull();
++    mockService.start();
++  }
++
++  /**
++   * Close the service
++   * @throws IOException if the close operation throws it
++   */
++  private void close() throws IOException {
++    assertServiceNotNull();
++    mockService.close();
++    assertInClosedState();
++  }
++
++  /**
++   * Assert that the {@link #mockService} field is not null}
++   */
++  private void assertServiceNotNull() {
++    assertNotNull("mockService is null", mockService);
++  }
++
++  /**
++   * Assert that the mock service is in a specific state
++   * @param state state that the service must be in
++   * @throws LifecycleService.StateException if it is not in that state
++   */
++  protected void assertInState(LifecycleService.ServiceState state)
++          throws LifecycleService.StateException {
++    assertServiceNotNull();
++    mockService.verifyServiceState(state);
++  }
++
++  /**
++   * Assert that the mock service is created
++   * @throws LifecycleService.StateException if it is not in that state
++   */
++  private void assertInCreatedState() throws LifecycleService.StateException {
++    assertInState(LifecycleService.ServiceState.CREATED);
++  }
++
++  /**
++   * Assert that the mock service is live
++   * @throws LifecycleService.StateException if it is not in that state
++   */
++  private void assertInLiveState() throws LifecycleService.StateException {
++    assertInState(LifecycleService.ServiceState.LIVE);
++  }
++
++  /**
++   * Assert that the mock service is failed
++   * @throws LifecycleService.StateException if it is not in that state
++   */
++  private void assertInFailedState() throws LifecycleService.StateException {
++    assertInState(LifecycleService.ServiceState.FAILED);
++  }
++
++  /**
++   * Assert that the mock service is closed
++   * @throws LifecycleService.StateException if it is not in that state
++   */
++  private void assertInClosedState() throws LifecycleService.StateException {
++    assertInState(LifecycleService.ServiceState.CLOSED);
++  }
++
++  /**
++   * Assert the mock service's {@link LifecycleService#isRunning()} test
++   * returns true
++   */
++  private void assertRunning() {
++    assertTrue("Service is not running: " + mockService, 
++               mockService.isRunning());
++  }
++
++  /**
++   * Assert the mock service's {@link LifecycleService#isRunning()} test
++   * returns false
++   */
++  private void assertNotRunning() {
++    assertFalse("Service is running: " + mockService, 
++                mockService.isRunning());
++  }
++
++  /**
++   * Force the mock service into a specific state. This bypasses the
++   * Base class's operations, and exists to force the mock service into
++   * explict states while being 100% sure that other states were not encountered
++   * @param state new state
++   * @throws LifecycleService.StateException if the service did not end up in
++   * the desired state
++   */
++  private void enterState(LifecycleService.ServiceState state)
++          throws LifecycleService.StateException {
++    assertServiceNotNull();
++    mockService.changeState(state);
++    assertInState(state);
++  }
++
++
++  /**
++   * Forcibly enter the failed state
++   * @throws LifecycleService.StateException if the service did not end up in
++   * the desired state
++   */
++  private void enterFailedState() throws LifecycleService.StateException {
++    enterState(LifecycleService.ServiceState.FAILED);
++  }
++
++
++  /**
++   * Query the mock service's count of state changes, and assert that
++   * it equals the expected value
++   * @param expected the expected state change count
++   */
++  private void assertStateChangeCount(int expected) {
++    assertEquals("Wrong state change count for " + mockService,
++            expected,
++            mockService.getStateChangeCount());
++  }
++
++  /**
++   * Query the state listener's count of state changes, and assert that
++   * it equals the expected value
++   * @param expected the expected state change count
++   */
++  private void assertStateListenerCount(int expected) {
++      assertEquals("Wrong listener state change count for " + mockService,
++              expected,
++              counter.getCount());
++    }
++
++  /**
++   * Assert that an attempt to start the service from a specified state
++   * results in a {@link LifecycleService.StateException} being thrown.
++   * @param serviceState the initial state
++   * @throws Throwable if something unexpected went wrong
++   */
++  private void assertNoStartFromState(LifecycleService.ServiceState serviceState)
++          throws Throwable {
++    enterState(serviceState);
++    try {
++      mockService.start();
++      failShouldNotGetHere();
++    } catch (LifecycleService.StateException expected) {
++      //expected
++    }
++  }
++
++  /**
++   * Invoke the {@link #fail(String)} operation if a test gets to this method,
++   * the mock service state is included
++   */
++  private void failShouldNotGetHere() {
++    fail("expected failure; the service is " + mockService);
++  }
++
++  /**
++   * Walk through the lifecycle and check it changes visible state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testBasicLifecycle() throws Throwable {
++    //the service is initially started
++    assertInCreatedState();
++    //and not running
++    assertNotRunning();
++    //start it
++    start();
++    //assert that it is live
++    assertInLiveState();
++    //and running: either live or started
++    assertRunning();
++    //now close it
++    close();
++    //check the number of state changes is three: 
++    //created -> started -> live -> closed.
++    assertStateChangeCount(3);
++    //and assert that the service is longer runing
++    assertNotRunning();
++  }
++  
++  /**
++   * Walk through the lifecycle and check it changes visible state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testGoLiveInStartIsOptional() throws Throwable {
++    assertInCreatedState();
++    assertNotRunning();
++    //this run, do not go live in when the service is started
++    mockService.setGoLiveInStart(false);
++    //start the service without going live
++    start();
++    //check that the service is started but not live
++    assertEquals(LifecycleService.ServiceState.STARTED, 
++                 mockService.getServiceState());
++    //and that it is considered running
++    assertRunning();
++    //now close it
++    close();
++    //the state change count shall be 2: created -> started -> closed.
++    assertStateChangeCount(2);
++    //and it is not running
++    assertNotRunning();
++  }
++
++  /**
++   * Assert that a state changing operation is idempotent. 
++   * This also tests the state change listener logic.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testStartIdempotent() throws Throwable {
++    //remove the state change counter, see it works. 
++    mockService.removeStateChangeListener(counter);
++    //and try again, as state change monitoring should be idempotent
++    mockService.removeStateChangeListener(counter);
++    //stare and go live
++    start();
++    //check the count
++    int count = mockService.getStateChangeCount();
++    //declare that we want to fail in our start operation
++    mockService.setFailOnStart(true);
++    //then start. If the serviceStart() method is called this would trigger 
++    //a failure
++    start();
++    //but if all is well, the service is still live
++    assertInLiveState();
++    //check that the state count has not changed either.
++    assertStateChangeCount(count);
++  }
++
++  /**
++   * Test that the close operation is only called once on a service
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testCloseIdempotent() throws Throwable {
++    close();
++    int count = mockService.getStateChangeCount();
++    close();
++    assertStateChangeCount(count);
++  }
++
++  /**
++   *    * @throws Throwable if something went wrong
++   * @throws Throwable if something went wrong   */
++  @Test
++  public void testCloseFromCreated() throws Throwable {
++    close();
++  }
++
++  /**
++   *
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testStaticCloseHandlesNull() throws Throwable {
++    LifecycleService.close(null);
++  }
++
++  /**
++   *
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testStaticCloseOperation() throws Throwable {
++    LifecycleService.close(mockService);
++    assertInClosedState();
++    LifecycleService.close(mockService);
++  }
++
++  /**
++   * Assert that when the {@link LifecycleService#start()} method is called and
++   * the implementation's {@link LifecycleService#serviceStart()} method fails, 
++   * the failure is caught, the service is left
++   * in the failed state, and the state change count went up by two.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testFailInStart() throws Throwable {
++    mockService.setFailOnStart(true);
++    int count = mockService.getStateChangeCount();
++    try {
++      start();
++      failShouldNotGetHere();
++    } catch (MockLifecycleService.MockServiceException e) {
++      assertInFailedState();
++      //we should have entered two more states, STARTED and FAILED
++      assertStateChangeCount(count + 2);
++      //check that the listener got informed too
++      assertStateListenerCount(count + 2);
++    }
++  }
++
++  /**
++   * Test that closed is the final state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testCloseFromFailure() throws Throwable {
++    //enter the failed state
++    enterFailedState();
++    //now close the service
++    close();
++    //test that we can get from failed to closed
++    assertInClosedState();
++  }
++
++
++  /**
++   * Test the static start service method starts a non-null service.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testStaticStartServiceMethod() throws Throwable {
++    //start the service
++    LifecycleService.startService(mockService);
++    //assert that it is live when the service is set to turn itself live in 
++    //its startService() method
++    assertInLiveState();
++  }
++
++  /**
++   * Tell the mock object to fail on startup and assert that the
++   * service is left in the closed state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testDeployFailingStart() throws Throwable {
++    int count = mockService.getStateChangeCount();
++    mockService.setFailOnStart(true);
++    try {
++      LifecycleService.startService(mockService);
++    } catch (MockLifecycleService.MockServiceException e) {
++      assertInClosedState();
++      Throwable failureCause = mockService.getFailureCause();
++      assertNotNull("failure cause is null", failureCause);
++      //check that it is the same as the exception thrown by the close() 
++      // operation
++      assertEquals("thrown exception and failure cause are different",
++                   e, failureCause);
++      //assert that the state change count is now at three: created -> start
++      assertEquals(count + 3, mockService.getStateChangeCount());
++    }
++  }
++
++  /**
++   * assert thatt he service will not start if it is in the closed state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testNoStartFromTerminated() throws Throwable {
++    assertNoStartFromState(LifecycleService.ServiceState.CLOSED);
++  }
++
++  /**
++   * assert that the service will not start if it is already in the failed state
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testNoStartFromFailed() throws Throwable {
++    assertNoStartFromState(LifecycleService.ServiceState.FAILED);
++  }
++
++  /**
++   * Assert that it is harmless to start a service while live.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testStartFromLiveIdempotent() throws Throwable {
++    //force the mock service into the live state without actually
++    //entering the started state, through
++    //a mock object back door.
++    enterState(LifecycleService.ServiceState.LIVE);
++    //get the state change count
++    int count = mockService.getStateChangeCount();
++    //now try to start the service
++    start();
++    //assert that the state change count is unchanged.
++    assertStateChangeCount(count);
++  }
++
++  /**
++   * Tell the mock service to fail during the close operation, asserts that
++   * the failure information is not directly saved, but that it is thrown
++   * as the exception.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testFailOnClose() throws Throwable {
++    mockService.setFailOnClose(true);
++    try {
++      mockService.close();
++      fail("Should have thrown an exception");
++    } catch (MockLifecycleService.MockServiceException e) {
++      //check the service was closed
++      assertInClosedState();
++      assertTrue(mockService.isClosed());
++      //get the failure cause
++      Throwable failureCause = mockService.getFailureCause();
++      //check it is null
++      assertNull("failure cause is not null", failureCause);
++      //check that the exception message is as expected
++      assertEquals("failOnClose", e.getMessage());
++    }
++    //the second close operation should be a no-op; no exceptions get thrown
++    mockService.close();
++  }
++
++
++
++  /**
++   * Test that if the service is closed, failure is ignored.
++   * Neither the cause of failure or the state is changed.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testFailFromClosedDoesNotChangeState() throws Throwable {
++    LifecycleService.startService(mockService);
++    mockService.close();
++    assertInClosedState();
++    Exception cause = new Exception("test");
++    mockService.enterFailedState(cause);
++    assertInClosedState();
++    assertEquals(cause, mockService.getFailureCause());
++  }
++
++  /**
++   * Test that if already the failed state, a second failure
++   * does not change the original failure cause. 
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testFailFromFailedDoesNotChangeCause() throws Throwable {
++    Exception cause = new Exception("test");
++    mockService.enterFailedState(cause);
++    assertInFailedState();
++    mockService.enterFailedState(new Exception("test2"));
++    assertInFailedState();
++    assertEquals(cause, mockService.getFailureCause());
++  }
++
++  /**
++   * Test that a failure is idempotent, and that if the initial failure cause 
++   * was null then a second attempt to fail the service does record the cause.
++   * It is only once a failure cause has been logged that callers cannot change
++   * it again.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testFailIdempotentAndSetsANonNullCause() throws Throwable {
++    Exception cause = new Exception("test");
++    mockService.enterFailedState(null);
++    int count = mockService.getStateChangeCount();
++    mockService.enterFailedState(cause);
++    assertStateChangeCount(count);
++    assertEquals(cause, mockService.getFailureCause());
++  }
++
++  /**
++   * Test that if you pass in a null pointer to the static  
++   * {@link LifecycleService#startService(LifecycleService)} method an NPE is
++   * thrown. 
++   * 
++   * This is important, as the method tries to catch all other failure modes 
++   * and add it as the failure cause on the service, which
++   * does not work if the service argument is null.
++   * @throws Throwable if something went wrong
++   */
++  @Test
++  public void testNullServiceStaticStart() throws Throwable {
++    try {
++      mockService = null;
++      LifecycleService.startService(mockService);
++      failShouldNotGetHere();
++    } catch (NullPointerException expected) {
++      //do nothing
++    }
++  }
++  
++  @Test
++  public void testServiceRequiresNonNullConfiguration() throws Throwable {
++    try {
++      mockService = new MockLifecycleService(null);
++      LifecycleService.startService(mockService);
++      failShouldNotGetHere();
++    } catch (LifecycleService.StateException se) {
++      //check the text is valid
++      assertEquals(LifecycleService.ERROR_NO_CONFIGURATION, se.getMessage());
++    }
++  }
++}

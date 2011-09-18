@@ -1,0 +1,22 @@
+diff --git a/src/java/org/apache/hadoop/http/HttpServer.java b/src/java/org/apache/hadoop/http/HttpServer.java
+index 890ecb8..f08bbf9 100644
+--- a/src/java/org/apache/hadoop/http/HttpServer.java
++++ b/src/java/org/apache/hadoop/http/HttpServer.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.http;
+ import java.io.FileNotFoundException;
+ import java.io.IOException;
+ import java.io.PrintWriter;
++import java.io.InterruptedIOException;
+ import java.net.BindException;
+ import java.net.InetSocketAddress;
+ import java.net.URL;
+@@ -641,6 +642,9 @@ public class HttpServer implements FilterContainer {
+       }
+     } catch (IOException e) {
+       throw e;
++    } catch (InterruptedException e) {
++      throw (IOException) new InterruptedIOException(
++          "Interrupted while starting HTTP server").initCause(e);
+     } catch (Exception e) {
+       throw new IOException("Problem starting http server", e);
+     }

@@ -1,0 +1,54 @@
+diff --git a/src/test/mapred/org/apache/hadoop/mapred/TestRecoveryManager.java b/src/test/mapred/org/apache/hadoop/mapred/TestRecoveryManager.java
+index c446af4..00c43cb 100644
+--- a/src/test/mapred/org/apache/hadoop/mapred/TestRecoveryManager.java
++++ b/src/test/mapred/org/apache/hadoop/mapred/TestRecoveryManager.java
+@@ -85,10 +85,8 @@ public class TestRecoveryManager extends TestCase {
+     RunningJob rJob1 = (new JobClient(job1)).submitJob(job1);
+     LOG.info("Submitted job " + rJob1.getID());
+     
+-    while (rJob1.mapProgress() < 0.5f) {
+-      LOG.info("Waiting for job " + rJob1.getID() + " to be 50% done");
+-      UtilsForTests.waitFor(100);
+-    }
++    // wait for 50%
++    UtilsForTests.waitForJobHalfDone(rJob1);
+         
+     JobConf job2 = mr.createJobConf();
+     
+@@ -100,10 +98,8 @@ public class TestRecoveryManager extends TestCase {
+     RunningJob rJob2 = (new JobClient(job2)).submitJob(job2);
+     LOG.info("Submitted job " + rJob2.getID());
+     
+-    while (rJob2.mapProgress() < 0.5f) {
+-      LOG.info("Waiting for job " + rJob2.getID() + " to be 50% done");
+-      UtilsForTests.waitFor(100);
+-    }
++    // wait for 50%
++    UtilsForTests.waitForJobHalfDone(rJob2);
+     
+     // kill the jobtracker
+     LOG.info("Stopping jobtracker");
+diff --git a/src/test/mapred/org/apache/hadoop/mapred/UtilsForTests.java b/src/test/mapred/org/apache/hadoop/mapred/UtilsForTests.java
+index 08c81b7..1e8e108 100644
+--- a/src/test/mapred/org/apache/hadoop/mapred/UtilsForTests.java
++++ b/src/test/mapred/org/apache/hadoop/mapred/UtilsForTests.java
+@@ -240,6 +240,19 @@ public class UtilsForTests {
+     } catch (InterruptedException ie) {}
+   }
+   
++  static void waitForJobHalfDone(RunningJob job)
++          throws IOException {
++    // wait for 50%
++    long timeout = System.currentTimeMillis() + 60000;
++    while (job.mapProgress() < 0.5f) {
++      if(System.currentTimeMillis() > timeout) {
++        throw new IOException("Timeout waiting for job to get to 50% done");
++      }
++      LOG.info("Waiting for job " + job.getID() + " to be 50% done");
++      UtilsForTests.waitFor(100);
++    }
++  }
++  
+   /**
+    * Wait for the jobtracker to be RUNNING.
+    */

@@ -1,0 +1,74 @@
+diff --git a/src/java/org/apache/hadoop/mapred/JobTracker.java b/src/java/org/apache/hadoop/mapred/JobTracker.java
+index b6496bb..5e29e9f 100644
+--- a/src/java/org/apache/hadoop/mapred/JobTracker.java
++++ b/src/java/org/apache/hadoop/mapred/JobTracker.java
+@@ -1543,10 +1543,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
+       try {
+         // if we haven't contacted the namenode go ahead and do it
+         if (fs == null) {
+-          fs = getMROwner().doAs(new PrivilegedExceptionAction<FileSystem>() {
+-            public FileSystem run() throws IOException {
+-              return FileSystem.get(conf);
+-          }});
++          bindFileSystem(conf);
+         }
+         // clean up the system dir, which will only work if hdfs is out of 
+         // safe mode
+@@ -3915,6 +3912,10 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
+    * @see org.apache.hadoop.mapreduce.protocol.ClientProtocol#getSystemDir()
+    */
+   public String getSystemDir() {
++    if (fs == null) {
++      throw new java.lang.IllegalStateException("Filesystem is null; "
++              + "JobTracker is not live: " + toString());
++    }
+     Path sysDir = new Path(conf.get(JTConfig.JT_SYSTEM_DIR, "/tmp/hadoop/mapred/system"));
+     return fs.makeQualified(sysDir).toString();
+   }
+@@ -3923,7 +3924,12 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
+    * @throws LoginException 
+    * @see org.apache.hadoop.mapreduce.protocol.ClientProtocol#getStagingAreaDir()
+    */
++  @Override
+   public String getStagingAreaDir() throws IOException {
++    if (fs == null) {
++      throw new IOException("Filesystem is null; "
++                               + "JobTracker is not live: " + toString());
++    }
+     try {
+       final String user =
+           UserGroupInformation.getCurrentUser().getShortUserName();
+@@ -4606,7 +4612,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
+     trackerIdentifier = getDateFormat().format(new Date());
+ 
+     if (fs == null) {
+-      fs = FileSystem.get(conf);
++      bindFileSystem(conf);
+     }
+     this.localFs = FileSystem.getLocal(conf);
+     
+@@ -4714,6 +4720,24 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
+   }
+ 
+   /**
++   * Bind to the filesystem
++   * @param conf the configuration to use
++   * @throws IOException if there was a problem binding to the filesystem
++   */
++  private void bindFileSystem(final JobConf conf)
++      throws IOException, InterruptedException {
++    fs = getMROwner().doAs(new PrivilegedExceptionAction<FileSystem>() {
++      public FileSystem run() throws IOException {
++        return FileSystem.get(conf);
++      }
++    });
++    if (fs == null) {
++      throw new IllegalStateException("Unable to bind to the filesystem: "
++          + FileSystem.getDefaultUri(conf));
++    }
++  }
++
++  /**
+    * Get the path of the locally stored job file
+    * @param jobId id of the job
+    * @return the path of the job file on the local file system 

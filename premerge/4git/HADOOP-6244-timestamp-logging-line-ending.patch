@@ -1,0 +1,16 @@
+Index: ../hadoop-common/src/java/org/apache/hadoop/metrics/file/FileContext.java
+===================================================================
+--- ../hadoop-common/src/java/org/apache/hadoop/metrics/file/FileContext.java	(date 1316364911000)
++++ ../hadoop-common/src/java/org/apache/hadoop/metrics/file/FileContext.java	(revision )
+@@ -43,9 +43,11 @@
+  * myContextName.fileName=/tmp/metrics.log
+  * myContextName.period=5
+  * </pre>
++ * @deprecated use {@link org.apache.hadoop.metrics2.sink.FileSink} instead.
+  */
+ @InterfaceAudience.Public
+ @InterfaceStability.Evolving
++@Deprecated
+ public class FileContext extends AbstractMetricsContext {
+     
+   /* Configuration attribute names */

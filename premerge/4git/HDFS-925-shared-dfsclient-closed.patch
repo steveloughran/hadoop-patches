@@ -1,0 +1,115 @@
+diff --git a/src/java/org/apache/hadoop/hdfs/DFSClient.java b/src/java/org/apache/hadoop/hdfs/DFSClient.java
+index 40969b8..6faade6 100644
+--- a/src/java/org/apache/hadoop/hdfs/DFSClient.java
++++ b/src/java/org/apache/hadoop/hdfs/DFSClient.java
+@@ -116,6 +116,7 @@ public class DFSClient implements FSConstants, java.io.Closeable {
+   public static final Log LOG = LogFactory.getLog(DFSClient.class);
+   public static final long SERVER_DEFAULTS_VALIDITY_PERIOD = 60 * 60 * 1000L; // 1 hour
+   static final int TCP_WINDOW_SIZE = 128 * 1024; // 128 KB
++  public static final String FILESYSTEM_CLOSED = "Filesystem closed";
+   final ClientProtocol namenode;
+   final ClientProtocol rpcNamenode;
+   final UserGroupInformation ugi;
+@@ -133,6 +134,7 @@ public class DFSClient implements FSConstants, java.io.Closeable {
+   final DataTransferProtocol.ReplaceDatanodeOnFailure dtpReplaceDatanodeOnFailure;
+   final FileSystem.Statistics stats;
+   final int hdfsTimeout;    // timeout value for a DFS operation.
++  private IOException closedLocation; // where this filesystem was closed
+   final LeaseRenewer leaserenewer;
+ 
+   /**
+@@ -304,7 +306,11 @@ public class DFSClient implements FSConstants, java.io.Closeable {
+ 
+   void checkOpen() throws IOException {
+     if (!clientRunning) {
+-      IOException result = new IOException("Filesystem closed");
++      IOException result = new IOException(FILESYSTEM_CLOSED);
++      if (closedLocation != null) {
++        //report where the client was closed
++        result.initCause(closedLocation);
++      }
+       throw result;
+     }
+   }
+@@ -324,10 +330,21 @@ public class DFSClient implements FSConstants, java.io.Closeable {
+   
+       // close connections to the namenode
+       RPC.stopProxy(rpcNamenode);
++      //note where the location was closed
++      closedLocation = new IOException(FILESYSTEM_CLOSED);
++      LOG.debug("Closing filesystem", closedLocation);
+     }
+   }
+ 
+   /**
++   * Get any location where the the client was closed. If null, the client may be open
++   * @return a stack trace of where the client was closed or null
++   */
++  IOException getClosedLocation() {
++    return closedLocation;
++  }
++
++  /**
+    * Get the default block size for this cluster
+    * @return the default block size in bytes
+    */
+diff --git a/src/test/hdfs/org/apache/hadoop/hdfs/TestDistributedFileSystem.java b/src/test/hdfs/org/apache/hadoop/hdfs/TestDistributedFileSystem.java
+index f4ca2fc..4916147 100644
+--- a/src/test/hdfs/org/apache/hadoop/hdfs/TestDistributedFileSystem.java
++++ b/src/test/hdfs/org/apache/hadoop/hdfs/TestDistributedFileSystem.java
+@@ -20,6 +20,9 @@ package org.apache.hadoop.hdfs;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNotSame;
++import static org.junit.Assert.assertSame;
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+@@ -100,6 +103,45 @@ public class TestDistributedFileSystem {
+       if (cluster != null) {cluster.shutdown();}
+     }
+   }
++  /**
++   * Tests that if two shared DFS clients close, the origin of the first
++   * closure is retained.
++   * @throws Exception on a failure
++   */
++  @Test
++  public void testDFSDoubleClose() throws Exception {
++    Configuration conf = getTestConfiguration();
++    MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf).numDataNodes(2).build();
++    FileSystem fileSys = cluster.getFileSystem();
++    //get a cached copy, check it is a clone
++    FileSystem fileSys2 = cluster.getFileSystem();
++    assertSame(fileSys, fileSys2);
++    //get an uncached copy, verify this
++    FileSystem fileSys3 = cluster.getNewFileSystemInstance();
++    assertNotSame(fileSys, fileSys3);
++    try {
++      //close the first filesystem
++      fileSys.close();
++      //at this point, we expect the second (shared) DFS client to be closed
++      try {
++        fileSys2.create(new Path("/test/dfsclose2/file-0"));
++      } catch (IOException e) {
++        assertTrue(e.toString().contains(DFSClient.FILESYSTEM_CLOSED));
++        Throwable origin = e.getCause();
++        assertNotNull(origin);
++        assertTrue(origin.toString().contains(DFSClient.FILESYSTEM_CLOSED));
++      }
++      //and we expect the unshared FS client to be fine
++      fileSys3.create(new Path("/test/dfsclose2/file-1"));
++
++      //now get a new shared client
++      FileSystem fileSys4 = cluster.getFileSystem();
++      assertNotSame(fileSys, fileSys4);
++    }
++    finally {
++      cluster.shutdown();
++    }
++  }
+ 
+   @Test
+   public void testDFSClient() throws Exception {
