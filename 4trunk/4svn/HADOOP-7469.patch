@@ -1,0 +1,432 @@
+diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Client.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Client.java
+index c339ce7..58cf810 100644
+--- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Client.java
++++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Client.java
+@@ -23,8 +23,6 @@ import java.net.Socket;
+ import java.net.InetSocketAddress;
+ import java.net.SocketTimeoutException;
+ import java.net.UnknownHostException;
+-import java.net.ConnectException;
+-
+ import java.io.IOException;
+ import java.io.DataInputStream;
+ import java.io.DataOutputStream;
+@@ -235,8 +233,11 @@ public class Client {
+       this.remoteId = remoteId;
+       this.server = remoteId.getAddress();
+       if (server.isUnresolved()) {
+-        throw new UnknownHostException("unknown host: " + 
+-                                       remoteId.getAddress().getHostName());
++        throw NetUtils.wrapException(remoteId.getAddress().getHostName(),
++            remoteId.getAddress().getPort(),
++            null,
++            0,
++            new UnknownHostException());
+       }
+       this.rpcTimeout = remoteId.getRpcTimeout();
+       this.maxIdleTime = remoteId.getMaxIdleTime();
+@@ -1084,7 +1085,12 @@ public class Client {
+           call.error.fillInStackTrace();
+           throw call.error;
+         } else { // local exception
+-          throw wrapException(remoteId.getAddress(), call.error);
++          InetSocketAddress address = remoteId.getAddress();
++          throw NetUtils.wrapException(address.getHostName(),
++                  address.getPort(),
++                  NetUtils.getHostname(),
++                  0,
++                  call.error);
+         }
+       } else {
+         return call.value;
+@@ -1093,37 +1099,6 @@ public class Client {
+   }
+ 
+   /**
+-   * Take an IOException and the address we were trying to connect to
+-   * and return an IOException with the input exception as the cause.
+-   * The new exception provides the stack trace of the place where 
+-   * the exception is thrown and some extra diagnostics information.
+-   * If the exception is ConnectException or SocketTimeoutException, 
+-   * return a new one of the same type; Otherwise return an IOException.
+-   * 
+-   * @param addr target address
+-   * @param exception the relevant exception
+-   * @return an exception to throw
+-   */
+-  private IOException wrapException(InetSocketAddress addr,
+-                                         IOException exception) {
+-    if (exception instanceof ConnectException) {
+-      //connection refused; include the host:port in the error
+-      return (ConnectException)new ConnectException(
+-           "Call to " + addr + " failed on connection exception: " + exception)
+-                    .initCause(exception);
+-    } else if (exception instanceof SocketTimeoutException) {
+-      return (SocketTimeoutException)new SocketTimeoutException(
+-           "Call to " + addr + " failed on socket timeout exception: "
+-                      + exception).initCause(exception);
+-    } else {
+-      return (IOException)new IOException(
+-           "Call to " + addr + " failed on local exception: " + exception)
+-                                 .initCause(exception);
+-
+-    }
+-  }
+-
+-  /** 
+    * @deprecated Use {@link #call(Writable[], InetSocketAddress[], 
+    * Class, UserGroupInformation, Configuration)} instead 
+    */
+diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Server.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Server.java
+index 0bfc572..fa04120 100644
+--- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Server.java
++++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/Server.java
+@@ -51,8 +51,6 @@ import java.util.Random;
+ import java.util.concurrent.BlockingQueue;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.LinkedBlockingQueue;
+-import java.util.concurrent.ExecutorService;
+-import java.util.concurrent.Executors;
+ 
+ import javax.security.sasl.Sasl;
+ import javax.security.sasl.SaslException;
+@@ -70,6 +68,7 @@ import org.apache.hadoop.io.WritableUtils;
+ import org.apache.hadoop.ipc.RPC.VersionMismatch;
+ import org.apache.hadoop.ipc.metrics.RpcDetailedMetrics;
+ import org.apache.hadoop.ipc.metrics.RpcMetrics;
++import org.apache.hadoop.net.NetUtils;
+ import org.apache.hadoop.security.AccessControlException;
+ import org.apache.hadoop.security.SaslRpcServer;
+ import org.apache.hadoop.security.SaslRpcServer.AuthMethod;
+@@ -227,20 +226,11 @@ public abstract class Server {
+                           int backlog) throws IOException {
+     try {
+       socket.bind(address, backlog);
+-    } catch (BindException e) {
+-      BindException bindException = new BindException("Problem binding to " + address
+-                                                      + " : " + e.getMessage());
+-      bindException.initCause(e);
+-      throw bindException;
+     } catch (SocketException e) {
+-      // If they try to bind to a different host's address, give a better
+-      // error message.
+-      if ("Unresolved address".equals(e.getMessage())) {
+-        throw new UnknownHostException("Invalid hostname for server: " + 
+-                                       address.getHostName());
+-      } else {
+-        throw e;
+-      }
++      throw NetUtils.wrapException(null,
++          0,
++          address.getHostName(),
++          address.getPort(), e);
+     }
+   }
+   
+diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
+index b22aaa0..ba2b33f 100644
+--- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
++++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
+@@ -20,12 +20,15 @@ package org.apache.hadoop.net;
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.io.OutputStream;
++import java.net.BindException;
+ import java.net.InetAddress;
+ import java.net.InetSocketAddress;
+ import java.net.NetworkInterface;
++import java.net.NoRouteToHostException;
+ import java.net.Socket;
+ import java.net.SocketAddress;
+ import java.net.SocketException;
++import java.net.SocketTimeoutException;
+ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.net.UnknownHostException;
+@@ -53,7 +56,11 @@ public class NetUtils {
+   private static final Log LOG = LogFactory.getLog(NetUtils.class);
+   
+   private static Map<String, String> hostToResolved = 
+-                                     new HashMap<String, String>();
++          new HashMap<String, String>();
++  private static final String FOR_MORE_DETAILS_SEE
++      = " For more details see:  ";
++  public static final String UNKNOWN_HOST = "(unknown)";
++  public static final String HADOOP_WIKI = "http://wiki.apache.org/hadoop/";
+ 
+   /**
+    * Get the socket factory for the given class according to its
+@@ -516,4 +523,120 @@ public class NetUtils {
+     } catch (UnknownHostException ignore) { }
+     return addr;
+   }
++
++  /**
++   * Take an IOException , the local host port and remote host port details and
++   * return an IOException with the input exception as the cause and also
++   * include the host details. The new exception provides the stack trace of the
++   * place where the exception is thrown and some extra diagnostics information.
++   * If the exception is BindException or ConnectException or
++   * UnknownHostException or SocketTimeoutException, return a new one of the
++   * same type; Otherwise return an IOException.
++   *
++   * @param destHost target host (nullable)
++   * @param destPort target port
++   * @param localHost local host (nullable)
++   * @param localPort local port
++   * @param exception the caught exception.
++   * @return an exception to throw
++   */
++  public static IOException wrapException(final String destHost,
++                                          final int destPort,
++                                          final String localHost,
++                                          final int localPort,
++                                          final IOException exception) {
++    if (exception instanceof BindException) {
++      return new BindException(
++          "Problem binding to ["
++              + localHost
++              + ":"
++              + localPort
++              + "] "
++              + exception
++              + ";"
++              + see("BindException"));
++    } else if (exception instanceof ConnectException) {
++      // connection refused; include the host:port in the error
++      return (ConnectException) new ConnectException(
++          "Call From "
++              + localHost
++              + " to "
++              + destHost
++              + ":"
++              + destPort
++              + " failed on connection exception: "
++              + exception
++              + ";"
++              + see("ConnectionRefused"))
++          .initCause(exception);
++    } else if (exception instanceof UnknownHostException) {
++      return (UnknownHostException) new UnknownHostException(
++            "Invalid host name: "
++                + getHostDetailsAsString(destHost, destPort, localHost)
++                + exception
++                + ";"
++                + see("UnknownHost"))
++            .initCause(exception);
++    } else if (exception instanceof SocketTimeoutException) {
++      return (SocketTimeoutException) new SocketTimeoutException(
++              "Call From "
++                + localHost + " to " + destHost + ":" + destPort
++                + " failed on socket timeout exception: " + exception
++                + ";"
++                + see("SocketTimeout"))
++                .initCause(exception);
++    } else if (exception instanceof NoRouteToHostException) {
++      return (NoRouteToHostException) new NoRouteToHostException(
++          "No Route to Host from  "
++                 + localHost + " to " + destHost + ":" + destPort
++                 + " failed on socket timeout exception: " + exception
++                 + ";"
++                 + see("NoRouteToHost"))
++          .initCause(exception);
++    }
++    else {
++      return (IOException) new IOException("Failed on local exception: "
++          + exception
++          + "; Host Details : "
++          + getHostDetailsAsString(destHost, destPort, localHost))
++          .initCause(exception);
++
++    }
++  }
++
++  private static String see(final String entry) {
++    return FOR_MORE_DETAILS_SEE + HADOOP_WIKI + entry;
++  }
++
++  /**
++   * Get the host details as a string
++   * @param destHost destinatioon host (nullable)
++   * @param destPort destination port
++   * @param localHost local host (nullable)
++   * @return a string describing the destination host:port and the local host
++   */
++  private static String getHostDetailsAsString(final String destHost, 
++      final int destPort,
++      final String localHost) {
++    StringBuilder hostDetails = new StringBuilder(27);
++    hostDetails.append("local host is: ")
++        .append(quoteHost(localHost))
++        .append("; ");
++    hostDetails.append("destination host is: \"").append(quoteHost(destHost))
++        .append(":")
++        .append(destPort).append("; ");
++    return hostDetails.toString();
++  }
++
++  /**
++   * Quote a hostname if it is not null
++   * @param hostname the hostname; nullable
++   * @return a quoted hostname or {@link #UNKNOWN_HOST} if the hostname is null
++   */
++  private static String quoteHost(final String hostname) {
++    return (hostname != null) ?
++        ("\"" + hostname + "\"")
++        : UNKNOWN_HOST;
++  }
++
+ }
+diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java
+index 5d04c20..7c01e2f 100644
+--- hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java
++++ hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java
+@@ -23,7 +23,6 @@ import org.apache.commons.logging.*;
+ import org.apache.hadoop.io.IOUtils;
+ import org.apache.hadoop.io.Writable;
+ import org.apache.hadoop.io.LongWritable;
+-import org.apache.hadoop.security.UserGroupInformation;
+ import org.apache.hadoop.util.StringUtils;
+ import org.apache.hadoop.net.NetUtils;
+ 
+@@ -270,7 +269,7 @@ public class TestIPC {
+       fail("Expected an exception to have been thrown");
+     } catch (IOException e) {
+       String message = e.getMessage();
+-      String addressText = address.toString();
++      String addressText = address.getHostName() + ":" + address.getPort();
+       assertTrue("Did not find "+addressText+" in "+message,
+               message.contains(addressText));
+       Throwable cause=e.getCause();
+diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
+index f49d4c8..f8f06d1 100644
+--- hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
++++ hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
+@@ -17,9 +17,14 @@
+  */
+ package org.apache.hadoop.net;
+ 
++import junit.framework.AssertionFailedError;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
+ import org.junit.Test;
+ import static org.junit.Assert.*;
+ 
++import java.io.IOException;
++import java.net.BindException;
+ import java.net.Socket;
+ import java.net.ConnectException;
+ import java.net.SocketException;
+@@ -30,6 +35,12 @@ import org.apache.hadoop.conf.Configuration;
+ 
+ public class TestNetUtils {
+ 
++  private static final Log LOG = LogFactory.getLog(TestNetUtils.class);
++  private static final int DEST_PORT = 4040;
++  private static final String DEST_PORT_NAME = Integer.toString(DEST_PORT);
++  private static final int LOCAL_PORT = 8080;
++  private static final String LOCAL_PORT_NAME = Integer.toString(LOCAL_PORT);
++
+   /**
+    * Test that we can't accidentally connect back to the connecting socket due
+    * to a quirk in the TCP spec.
+@@ -88,4 +99,99 @@ public class TestNetUtils {
+       fail("NetUtils.verifyHostnames threw unexpected UnknownHostException");
+     }
+   }
++
++  @Test
++  public void testWrapConnectException() throws Throwable {
++    IOException e = new ConnectException("failed");
++    IOException wrapped = verifyExceptionClass(e, ConnectException.class);
++    assertInException(wrapped, "failed");
++    assertWikified(wrapped);
++    assertInException(wrapped, "localhost");
++    assertRemoteDetailsIncluded(wrapped);
++    assertInException(wrapped, "/ConnectionRefused");
++  }
++
++  @Test
++  public void testWrapBindException() throws Throwable {
++    IOException e = new BindException("failed");
++    IOException wrapped = verifyExceptionClass(e, BindException.class);
++    assertInException(wrapped, "failed");
++    assertLocalDetailsIncluded(wrapped);
++    assertNotInException(wrapped, DEST_PORT_NAME);
++    assertInException(wrapped, "/BindException");
++  }
++
++  @Test
++  public void testWrapUnknownHostException() throws Throwable {
++    IOException e = new UnknownHostException("failed");
++    IOException wrapped = verifyExceptionClass(e, UnknownHostException.class);
++    assertInException(wrapped, "failed");
++    assertWikified(wrapped);
++    assertInException(wrapped, "localhost");
++    assertRemoteDetailsIncluded(wrapped);
++    assertInException(wrapped, "/UnknownHost");
++  }
++
++  private void assertRemoteDetailsIncluded(IOException wrapped)
++      throws Throwable {
++    assertInException(wrapped, "desthost");
++    assertInException(wrapped, DEST_PORT_NAME);
++  }
++
++  private void assertLocalDetailsIncluded(IOException wrapped)
++      throws Throwable {
++    assertInException(wrapped, "localhost");
++    assertInException(wrapped, LOCAL_PORT_NAME);
++  }
++
++  private void assertWikified(Exception e) throws Throwable {
++    assertInException(e, NetUtils.HADOOP_WIKI);
++  }
++
++  private void assertInException(Exception e, String text) throws Throwable {
++    String message = extractExceptionMessage(e);
++    if (!(message.contains(text))) {
++      throw new AssertionFailedError("Wrong text in message "
++          + "\"" + message + "\""
++          + " expected \"" + text + "\"")
++          .initCause(e);
++    }
++  }
++
++  private String extractExceptionMessage(Exception e) throws Throwable {
++    assertNotNull("Null Exception", e);
++    String message = e.getMessage();
++    if (message == null) {
++      throw new AssertionFailedError("Empty text in exception " + e)
++          .initCause(e);
++    }
++    return message;
++  }
++
++  private void assertNotInException(Exception e, String text)
++      throws Throwable{
++    String message = extractExceptionMessage(e);
++    if (message.contains(text)) {
++      throw new AssertionFailedError("Wrong text in message "
++                                         + "\"" + message + "\""
++                                         + " did not expect \"" + text + "\"")
++          .initCause(e);
++    }
++  }
++
++  private IOException verifyExceptionClass(IOException e,
++                                           Class expectedClass)
++      throws Throwable {
++    assertNotNull("Null Exception", e);
++    IOException wrapped =
++        NetUtils.wrapException("desthost", DEST_PORT,
++                               "localhost", LOCAL_PORT,
++                               e);
++    if(!(wrapped.getClass().equals(expectedClass))) {
++      throw new AssertionFailedError("Wrong exception class; expected "
++        + expectedClass
++        + " got " + wrapped.getClass() + ": " + wrapped).initCause(wrapped);
++    }
++    return wrapped;
++  }
+ }
