@@ -1,0 +1,20 @@
+diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
+index 9b744ed..d94b69f 100644
+--- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
++++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
+@@ -526,7 +526,6 @@ public class NetUtils {
+   public static boolean isLocalAddress(InetAddress addr) {
+     // Check if the address is any local or loop back
+     boolean local = addr.isAnyLocalAddress() || addr.isLoopbackAddress();
+-    System.out.println("address is any or loopback address " + addr);
+ 
+     // Check if the address is defined on any interface
+     if (!local) {
+@@ -536,7 +535,6 @@ public class NetUtils {
+         local = false;
+       }
+     }
+-        System.out.println("address " + addr + " is local " + local);
+     return local;
+   }
+ }
