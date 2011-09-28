@@ -124,7 +124,7 @@ index 0bfc572..fa04120 100644
    }
    
 diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
-index b22aaa0..ba2b33f 100644
+index d94b69f..5f35b85 100644
 --- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
 +++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/NetUtils.java
 @@ -20,12 +20,15 @@ package org.apache.hadoop.net;
@@ -143,22 +143,23 @@ index b22aaa0..ba2b33f 100644
  import java.net.URI;
  import java.net.URISyntaxException;
  import java.net.UnknownHostException;
-@@ -53,7 +56,11 @@ public class NetUtils {
-   private static final Log LOG = LogFactory.getLog(NetUtils.class);
+@@ -54,6 +57,13 @@ public class NetUtils {
    
    private static Map<String, String> hostToResolved = 
--                                     new HashMap<String, String>();
-+          new HashMap<String, String>();
+                                      new HashMap<String, String>();
++  /** text to point users elsewhere: {@value} */
 +  private static final String FOR_MORE_DETAILS_SEE
 +      = " For more details see:  ";
++  /** text included in wrapped exceptions if the host is null: {@value} */
 +  public static final String UNKNOWN_HOST = "(unknown)";
++  /** Base URL of the Hadoop Wiki: {@value} */
 +  public static final String HADOOP_WIKI = "http://wiki.apache.org/hadoop/";
  
    /**
     * Get the socket factory for the given class according to its
-@@ -516,4 +523,120 @@ public class NetUtils {
-     } catch (UnknownHostException ignore) { }
-     return addr;
+@@ -537,4 +547,119 @@ public class NetUtils {
+     }
+     return local;
    }
 +
 +  /**
@@ -208,34 +209,34 @@ index b22aaa0..ba2b33f 100644
 +          .initCause(exception);
 +    } else if (exception instanceof UnknownHostException) {
 +      return (UnknownHostException) new UnknownHostException(
-+            "Invalid host name: "
-+                + getHostDetailsAsString(destHost, destPort, localHost)
-+                + exception
-+                + ";"
-+                + see("UnknownHost"))
-+            .initCause(exception);
++          "Invalid host name: "
++              + getHostDetailsAsString(destHost, destPort, localHost)
++              + exception
++              + ";"
++              + see("UnknownHost"))
++          .initCause(exception);
 +    } else if (exception instanceof SocketTimeoutException) {
 +      return (SocketTimeoutException) new SocketTimeoutException(
-+              "Call From "
-+                + localHost + " to " + destHost + ":" + destPort
-+                + " failed on socket timeout exception: " + exception
-+                + ";"
-+                + see("SocketTimeout"))
-+                .initCause(exception);
++          "Call From "
++              + localHost + " to " + destHost + ":" + destPort
++              + " failed on socket timeout exception: " + exception
++              + ";"
++              + see("SocketTimeout"))
++          .initCause(exception);
 +    } else if (exception instanceof NoRouteToHostException) {
 +      return (NoRouteToHostException) new NoRouteToHostException(
 +          "No Route to Host from  "
-+                 + localHost + " to " + destHost + ":" + destPort
-+                 + " failed on socket timeout exception: " + exception
-+                 + ";"
-+                 + see("NoRouteToHost"))
++              + localHost + " to " + destHost + ":" + destPort
++              + " failed on socket timeout exception: " + exception
++              + ";"
++              + see("NoRouteToHost"))
 +          .initCause(exception);
 +    }
 +    else {
 +      return (IOException) new IOException("Failed on local exception: "
-+          + exception
-+          + "; Host Details : "
-+          + getHostDetailsAsString(destHost, destPort, localHost))
++                                               + exception
++                                               + "; Host Details : "
++                                               + getHostDetailsAsString(destHost, destPort, localHost))
 +          .initCause(exception);
 +
 +    }
@@ -252,9 +253,9 @@ index b22aaa0..ba2b33f 100644
 +   * @param localHost local host (nullable)
 +   * @return a string describing the destination host:port and the local host
 +   */
-+  private static String getHostDetailsAsString(final String destHost, 
-+      final int destPort,
-+      final String localHost) {
++  private static String getHostDetailsAsString(final String destHost,
++                                               final int destPort,
++                                               final String localHost) {
 +    StringBuilder hostDetails = new StringBuilder(27);
 +    hostDetails.append("local host is: ")
 +        .append(quoteHost(localHost))
@@ -275,7 +276,6 @@ index b22aaa0..ba2b33f 100644
 +        ("\"" + hostname + "\"")
 +        : UNKNOWN_HOST;
 +  }
-+
  }
 diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/ipc/TestIPC.java
 index 5d04c20..7c01e2f 100644
@@ -299,10 +299,10 @@ index 5d04c20..7c01e2f 100644
                message.contains(addressText));
        Throwable cause=e.getCause();
 diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
-index f49d4c8..f8f06d1 100644
+index 7cc6f4d..d0927b9 100644
 --- hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
 +++ hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestNetUtils.java
-@@ -17,9 +17,14 @@
+@@ -17,10 +17,15 @@
   */
  package org.apache.hadoop.net;
  
@@ -310,14 +310,15 @@ index f49d4c8..f8f06d1 100644
 +import org.apache.commons.logging.Log;
 +import org.apache.commons.logging.LogFactory;
  import org.junit.Test;
+ 
  import static org.junit.Assert.*;
  
 +import java.io.IOException;
 +import java.net.BindException;
+ import java.net.InetAddress;
+ import java.net.NetworkInterface;
  import java.net.Socket;
- import java.net.ConnectException;
- import java.net.SocketException;
-@@ -30,6 +35,12 @@ import org.apache.hadoop.conf.Configuration;
+@@ -34,6 +39,12 @@ import org.apache.hadoop.conf.Configuration;
  
  public class TestNetUtils {
  
@@ -330,9 +331,9 @@ index f49d4c8..f8f06d1 100644
    /**
     * Test that we can't accidentally connect back to the connecting socket due
     * to a quirk in the TCP spec.
-@@ -88,4 +99,99 @@ public class TestNetUtils {
-       fail("NetUtils.verifyHostnames threw unexpected UnknownHostException");
+@@ -120,4 +131,100 @@ public class TestNetUtils {
      }
+     assertFalse(NetUtils.isLocalAddress(InetAddress.getByName("8.8.8.8")));
    }
 +
 +  @Test
@@ -387,8 +388,8 @@ index f49d4c8..f8f06d1 100644
 +    String message = extractExceptionMessage(e);
 +    if (!(message.contains(text))) {
 +      throw new AssertionFailedError("Wrong text in message "
-+          + "\"" + message + "\""
-+          + " expected \"" + text + "\"")
++                                         + "\"" + message + "\""
++                                         + " expected \"" + text + "\"")
 +          .initCause(e);
 +    }
 +  }
@@ -422,10 +423,11 @@ index f49d4c8..f8f06d1 100644
 +        NetUtils.wrapException("desthost", DEST_PORT,
 +                               "localhost", LOCAL_PORT,
 +                               e);
++    LOG.info(wrapped.toString(), wrapped);
 +    if(!(wrapped.getClass().equals(expectedClass))) {
 +      throw new AssertionFailedError("Wrong exception class; expected "
-+        + expectedClass
-+        + " got " + wrapped.getClass() + ": " + wrapped).initCause(wrapped);
++                                         + expectedClass
++                                         + " got " + wrapped.getClass() + ": " + wrapped).initCause(wrapped);
 +    }
 +    return wrapped;
 +  }
