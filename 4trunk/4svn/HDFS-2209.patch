@@ -1,16 +1,8 @@
 diff --git hadoop-hdfs-project/hadoop-hdfs/src/test/java/org/apache/hadoop/hdfs/MiniDFSCluster.java hadoop-hdfs-project/hadoop-hdfs/src/test/java/org/apache/hadoop/hdfs/MiniDFSCluster.java
-index 8ebae4e..01f4468 100644
+index 8ebae4e..5a857f1 100644
 --- hadoop-hdfs-project/hadoop-hdfs/src/test/java/org/apache/hadoop/hdfs/MiniDFSCluster.java
 +++ hadoop-hdfs-project/hadoop-hdfs/src/test/java/org/apache/hadoop/hdfs/MiniDFSCluster.java
-@@ -36,6 +36,7 @@ import java.util.Random;
- 
- import org.apache.commons.logging.Log;
- import org.apache.commons.logging.LogFactory;
-+import org.apache.commons.math.stat.descriptive.rank.Min;
- import org.apache.hadoop.classification.InterfaceAudience;
- import org.apache.hadoop.classification.InterfaceStability;
- import org.apache.hadoop.conf.Configuration;
-@@ -86,6 +87,10 @@ public class MiniDFSCluster {
+@@ -86,6 +86,10 @@ public class MiniDFSCluster {
  
    private static final String NAMESERVICE_ID_PREFIX = "nameserviceId";
    private static final Log LOG = LogFactory.getLog(MiniDFSCluster.class);
@@ -21,7 +13,7 @@ index 8ebae4e..01f4468 100644
  
    static { DefaultMetricsSystem.setMiniClusterMode(true); }
  
-@@ -495,7 +500,7 @@ public class MiniDFSCluster {
+@@ -495,7 +499,7 @@ public class MiniDFSCluster {
        boolean waitSafeMode, boolean setupHostsFile, boolean federation) 
    throws IOException {
      this.conf = conf;
@@ -30,7 +22,7 @@ index 8ebae4e..01f4468 100644
      data_dir = new File(base_dir, "data");
      this.federation = federation;
      this.waitSafeMode = waitSafeMode;
-@@ -504,7 +509,7 @@ public class MiniDFSCluster {
+@@ -504,7 +508,7 @@ public class MiniDFSCluster {
      String rpcEngineName = System.getProperty("hdfs.rpc.engine");
      if (rpcEngineName != null && !"".equals(rpcEngineName)) {
        
@@ -39,7 +31,7 @@ index 8ebae4e..01f4468 100644
        try {
          Class<?> rpcEngine = conf.getClassByName(rpcEngineName);
          setRpcEngine(conf, NamenodeProtocols.class, rpcEngine);
-@@ -858,8 +863,8 @@ public class MiniDFSCluster {
+@@ -858,8 +862,8 @@ public class MiniDFSCluster {
        // Set up datanode address
        setupDatanodeAddress(dnConf, setupHostsFile, checkDataNodeAddrConfig);
        if (manageDfsDirs) {
@@ -50,7 +42,7 @@ index 8ebae4e..01f4468 100644
          dir1.mkdirs();
          dir2.mkdirs();
          if (!dir1.isDirectory() || !dir2.isDirectory()) { 
-@@ -875,17 +880,17 @@ public class MiniDFSCluster {
+@@ -875,17 +879,17 @@ public class MiniDFSCluster {
          dnConf.setLong(SimulatedFSDataset.CONFIG_PROPERTY_CAPACITY,
              simulatedCapacities[i-curDatanodesNum]);
        }
@@ -71,7 +63,7 @@ index 8ebae4e..01f4468 100644
                              racks[i-curDatanodesNum]);
          StaticMapping.addNodeToRack(name,
                                      racks[i-curDatanodesNum]);
-@@ -903,7 +908,7 @@ public class MiniDFSCluster {
+@@ -903,7 +907,7 @@ public class MiniDFSCluster {
        String ipAddr = dn.getSelfAddr().getAddress().getHostAddress();
        if (racks != null) {
          int port = dn.getSelfAddr().getPort();
@@ -80,7 +72,7 @@ index 8ebae4e..01f4468 100644
                              " to rack " + racks[i-curDatanodesNum]);
          StaticMapping.addNodeToRack(ipAddr + ":" + port,
                                    racks[i-curDatanodesNum]);
-@@ -1099,7 +1104,7 @@ public class MiniDFSCluster {
+@@ -1099,7 +1103,7 @@ public class MiniDFSCluster {
     * Shutdown all the nodes in the cluster.
     */
    public void shutdown() {
@@ -89,7 +81,7 @@ index 8ebae4e..01f4468 100644
      shutdownDataNodes();
      for (NameNodeInfo nnInfo : nameNodes) {
        NameNode nameNode = nnInfo.nameNode;
-@@ -1139,7 +1144,7 @@ public class MiniDFSCluster {
+@@ -1139,7 +1143,7 @@ public class MiniDFSCluster {
    public synchronized void shutdownNameNode(int nnIndex) {
      NameNode nn = nameNodes[nnIndex].nameNode;
      if (nn != null) {
@@ -98,7 +90,7 @@ index 8ebae4e..01f4468 100644
        nn.stop();
        nn.join();
        Configuration conf = nameNodes[nnIndex].conf;
-@@ -1183,9 +1188,9 @@ public class MiniDFSCluster {
+@@ -1183,9 +1187,9 @@ public class MiniDFSCluster {
      nameNodes[nnIndex] = new NameNodeInfo(nn, conf);
      if (waitActive) {
        waitClusterUp();
@@ -110,7 +102,7 @@ index 8ebae4e..01f4468 100644
      }
    }
  
-@@ -1261,7 +1266,7 @@ public class MiniDFSCluster {
+@@ -1261,7 +1265,7 @@ public class MiniDFSCluster {
      }
      DataNodeProperties dnprop = dataNodes.remove(i);
      DataNode dn = dnprop.datanode;
@@ -119,7 +111,7 @@ index 8ebae4e..01f4468 100644
                         dn.getMachineName() +
                         " from a total of " + (dataNodes.size() + 1) + 
                         " datanodes.");
-@@ -1350,7 +1355,7 @@ public class MiniDFSCluster {
+@@ -1350,7 +1354,7 @@ public class MiniDFSCluster {
      for (int i = dataNodes.size() - 1; i >= 0; i--) {
        if (!restartDataNode(i, keepPort))
          return false;
@@ -128,7 +120,7 @@ index 8ebae4e..01f4468 100644
      }
      return true;
    }
-@@ -1377,8 +1382,8 @@ public class MiniDFSCluster {
+@@ -1377,8 +1381,8 @@ public class MiniDFSCluster {
      } catch (IOException ioe) {
        // This method above should never throw.
        // It only throws IOE since it is exposed via RPC
@@ -139,7 +131,7 @@ index 8ebae4e..01f4468 100644
      }
      boolean isUp = false;
      synchronized (this) {
-@@ -1524,7 +1529,7 @@ public class MiniDFSCluster {
+@@ -1524,7 +1528,7 @@ public class MiniDFSCluster {
            failedCount++;
            // Cached RPC connection to namenode, if any, is expected to fail once
            if (failedCount > 1) {
@@ -148,7 +140,7 @@ index 8ebae4e..01f4468 100644
                  + " time(s) and failed, giving up.  "
                  + StringUtils.stringifyException(e));
              throw e;
-@@ -1576,7 +1581,7 @@ public class MiniDFSCluster {
+@@ -1576,7 +1580,7 @@ public class MiniDFSCluster {
    }
  
    public void formatDataNodeDirs() throws IOException {
@@ -157,7 +149,7 @@ index 8ebae4e..01f4468 100644
      data_dir = new File(base_dir, "data");
      if (data_dir.exists() && !FileUtil.fullyDelete(data_dir)) {
        throw new IOException("Cannot remove data directory: " + data_dir);
-@@ -1697,8 +1702,49 @@ public class MiniDFSCluster {
+@@ -1697,8 +1701,49 @@ public class MiniDFSCluster {
      return data_dir.getAbsolutePath();
    }
  
@@ -208,7 +200,7 @@ index 8ebae4e..01f4468 100644
    }
  
    /**
-@@ -1716,13 +1762,25 @@ public class MiniDFSCluster {
+@@ -1716,13 +1761,25 @@ public class MiniDFSCluster {
     * @return Storage directory
     */
    public static File getStorageDir(int dnIndex, int dirIndex) {
@@ -239,7 +231,7 @@ index 8ebae4e..01f4468 100644
     */
    public static String getDNCurrentDir(File storageDir) {
      return storageDir + "/" + Storage.STORAGE_DIR_CURRENT + "/";
-@@ -1730,8 +1788,8 @@ public class MiniDFSCluster {
+@@ -1730,8 +1787,8 @@ public class MiniDFSCluster {
    
    /**
     * Get directory corresponding to block pool directory in the datanode
@@ -250,7 +242,7 @@ index 8ebae4e..01f4468 100644
     */
    public static String getBPDir(File storageDir, String bpid) {
      return getDNCurrentDir(storageDir) + bpid + "/";
-@@ -1777,6 +1835,16 @@ public class MiniDFSCluster {
+@@ -1777,6 +1834,16 @@ public class MiniDFSCluster {
      return new File(getFinalizedDir(storageDir, blk.getBlockPoolId()), 
          blk.getBlockName());
    }
