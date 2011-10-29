@@ -1,0 +1,43 @@
+diff --git hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
+index 2507813..af0621e 100644
+--- hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
++++ hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
+@@ -65,6 +65,8 @@ import org.apache.hadoop.hdfs.server.protocol.BlocksWithLocations.BlockWithLocat
+ import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
+ import org.apache.hadoop.hdfs.server.protocol.KeyUpdateCommand;
+ import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
++import org.apache.hadoop.net.AbstractDNSToSwitchMapping;
++import org.apache.hadoop.net.DNSToSwitchMapping;
+ import org.apache.hadoop.net.Node;
+ import org.apache.hadoop.util.Daemon;
+ 
+@@ -219,9 +221,9 @@ public class BlockManager {
+ 
+     this.maxReplicationStreams = conf.getInt(DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_KEY,
+                                              DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_DEFAULT);
+-    this.shouldCheckForEnoughRacks = conf.get(DFSConfigKeys.NET_TOPOLOGY_SCRIPT_FILE_NAME_KEY) == null ? false
+-                                                                             : true;
+-    
++    DNSToSwitchMapping dnsMap = datanodeManager.getDnsToSwitchMapping();
++    this.shouldCheckForEnoughRacks = AbstractDNSToSwitchMapping.isMappingSingleSwitch(dnsMap);
++
+     this.replicationRecheckInterval = 
+       conf.getInt(DFSConfigKeys.DFS_NAMENODE_REPLICATION_INTERVAL_KEY, 
+                   DFSConfigKeys.DFS_NAMENODE_REPLICATION_INTERVAL_DEFAULT) * 1000L;
+diff --git hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
+index 33b648c..64b517c 100644
+--- hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
++++ hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
+@@ -945,4 +945,12 @@ public class DatanodeManager {
+       }
+     }
+   }
++
++  /**
++   * Get the DNS to switch mapper; valid after initialization.
++   * @return the DNS to switch mapper
++   */
++  public DNSToSwitchMapping getDnsToSwitchMapping() {
++    return dnsToSwitchMapping;
++  }
+ }
