@@ -164,39 +164,39 @@ index 2a832f2..8521a9a 100644
     * @return list of resolved network paths.
     * If <i>names</i> is empty, the returned list is also empty
 diff --git hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/ScriptBasedMapping.java hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/ScriptBasedMapping.java
-index bf24a04..6725b2d 100644
+index bf24a04..4e2dcf6 100644
 --- hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/ScriptBasedMapping.java
 +++ hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/net/ScriptBasedMapping.java
-@@ -32,16 +32,22 @@ import org.apache.hadoop.fs.CommonConfigurationKeys;
+@@ -32,16 +32,21 @@ import org.apache.hadoop.fs.CommonConfigurationKeys;
  
  /**
   * This class implements the {@link DNSToSwitchMapping} interface using a 
 - * script configured via the {@link CommonConfigurationKeys#NET_TOPOLOGY_SCRIPT_FILE_NAME_KEY}
-+ * script configured via the {@link CommonConfigurationKeys#NET_TOPOLOGY_SCRIPT_FILE_NAME_KEY}/
++ * script configured via the
++ * {@link CommonConfigurationKeys#NET_TOPOLOGY_SCRIPT_FILE_NAME_KEY} option.
 + * <p/>
-+ * It contains a static class {@link RawScriptBasedMapping} that performs
++ * It contains a static class <code>RawScriptBasedMapping</code> that performs
 + * the work: reading the configuration parameters, executing any defined
-+ * script, handling errors and such like. The public <code>ScriptBasedMapping</code>
-+ * class extends {@link #CachedDNSToSwitchMapping(DNSToSwitchMapping)} with a
-+ * <code>RawScriptBasedMapping</code> instance inside it. This allows
-+ * all the script results to be cached.
++ * script, handling errors and such like. The outer
++ * class extends {@link CachedDNSToSwitchMapping} to cache the delegated
++ * queries.
 + * <p/>
-+ * This DNS mapper assumes that {@link #isSingleSwitch()} should return
++ * This DNS mapper's {@link #isSingleSwitch()} predicate returns
 + * true if and only if a script is defined.
   */
  @InterfaceAudience.Public
  @InterfaceStability.Evolving
- public final class ScriptBasedMapping extends CachedDNSToSwitchMapping 
+-public final class ScriptBasedMapping extends CachedDNSToSwitchMapping 
 -implements Configurable
 -{
 -  public ScriptBasedMapping() {
 -    super(new RawScriptBasedMapping());
 -  }
-+    implements Configurable {
++public final class ScriptBasedMapping extends CachedDNSToSwitchMapping {
  
    /**
     * Minimum number of arguments: {@value}
-@@ -66,6 +72,18 @@ implements Configurable
+@@ -66,6 +71,18 @@ implements Configurable
                       CommonConfigurationKeys.NET_TOPOLOGY_SCRIPT_NUMBER_ARGS_KEY ;
  
    /**
@@ -215,7 +215,7 @@ index bf24a04..6725b2d 100644
     * Create an instance from the given configuration
     * @param conf configuration
     */
-@@ -74,14 +92,31 @@ implements Configurable
+@@ -74,14 +91,31 @@ implements Configurable
      setConf(conf);
    }
  
@@ -249,12 +249,12 @@ index bf24a04..6725b2d 100644
    }
  
    /**
-@@ -89,29 +124,26 @@ implements Configurable
+@@ -89,29 +123,26 @@ implements Configurable
     * by the superclass {@link CachedDNSToSwitchMapping}
     */
    private static final class RawScriptBasedMapping
 -      implements DNSToSwitchMapping {
-+      extends AbstractDNSToSwitchMapping implements Configurable {
++      extends AbstractDNSToSwitchMapping {
      private String scriptName;
 -    private Configuration conf;
      private int maxArgs; //max hostnames per call of the script
@@ -292,7 +292,7 @@ index bf24a04..6725b2d 100644
      }
  
      /**
-@@ -122,42 +154,42 @@ implements Configurable
+@@ -122,42 +153,42 @@ implements Configurable
  
      @Override
      public List<String> resolve(List<String> names) {
@@ -365,8 +365,12 @@ index bf24a04..6725b2d 100644
  
      /**
       * Build and execute the resolution command. The command is
-@@ -198,7 +230,7 @@ implements Configurable
-             cmdList.toArray(new String[0]), dir);
+@@ -195,10 +226,10 @@ implements Configurable
+           dir = new File(userDir);
+         }
+         ShellCommandExecutor s = new ShellCommandExecutor(
+-            cmdList.toArray(new String[0]), dir);
++            cmdList.toArray(new String[cmdList.size()]), dir);
          try {
            s.execute();
 -          allOutput.append(s.getOutput() + " ");
@@ -374,7 +378,7 @@ index bf24a04..6725b2d 100644
          } catch (Exception e) {
            LOG.warn("Exception: ", e);
            return null;
-@@ -207,5 +239,15 @@ implements Configurable
+@@ -207,5 +238,15 @@ implements Configurable
        }
        return allOutput.toString();
      }
@@ -391,7 +395,7 @@ index bf24a04..6725b2d 100644
    }
  }
 diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/StaticMapping.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/StaticMapping.java
-index c3923ed..d354b32 100644
+index c3923ed..3be8a95 100644
 --- hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/StaticMapping.java
 +++ hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/StaticMapping.java
 @@ -17,34 +17,80 @@
@@ -492,7 +496,7 @@ index c3923ed..d354b32 100644
    public List<String> resolve(List<String> names) {
      List<String> m = new ArrayList<String>();
      synchronized (nameToRackMap) {
-@@ -59,4 +105,22 @@ public class StaticMapping extends Configured implements DNSToSwitchMapping {
+@@ -59,4 +105,24 @@ public class StaticMapping extends Configured implements DNSToSwitchMapping {
        return m;
      }
    }
@@ -503,7 +507,9 @@ index c3923ed..d354b32 100644
 +   */
 +  @Override
 +  public boolean isSingleSwitch() {
-+    return nameToRackMap.isEmpty();
++    synchronized (nameToRackMap) {
++      return nameToRackMap.isEmpty();
++    }
 +  }
 +
 +  /**
@@ -702,10 +708,10 @@ index 0000000..1775322
 +}
 diff --git hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestSwitchMapping.java hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestSwitchMapping.java
 new file mode 100644
-index 0000000..723b153
+index 0000000..e66a5c0
 --- /dev/null
 +++ hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/net/TestSwitchMapping.java
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,53 @@
 +/**
 + * Licensed to the Apache Software Foundation (ASF) under one
 + * or more contributor license agreements.  See the NOTICE file
@@ -728,7 +734,6 @@ index 0000000..723b153
 +
 +import org.junit.Assert;
 +import org.junit.Test;
-+import sun.security.util.Cache;
 +
 +import java.util.List;
 +
