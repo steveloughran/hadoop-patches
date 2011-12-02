@@ -1,0 +1,652 @@
+Working with Git
+Key Problems
+
+   1. Bringing multiple branches up to speed with SVN HEAD
+   2. Merging the different branches together to produce something I can use
+   3. Moving changes you make in the merged branch into the different branches
+   4. Synchronizing changes across machines
+
+
+
+
+The key concepts of Git.
+
+    * Git doesn't store changes, it snapshots the entire source tree. Good for fast switch and rollback, bad for binaries. (as an enhancement, if a file hasn't changed, it doesn't re-replicate it).
+    * Git stores all "events" as SHA1 checksummed objects; you have deltas, tags and commits, where a commit describes the status of items in the tree.
+    * Git is very branch centric; you work in your own branch off local or central repositories
+    * You had better enjoy merging.
+
+
+
+Naming
+How you refer to things in git is critical. You need to understand what is being named, and how commit checksums can be used to refer to specific commits
+
+    * Every commit in git has a sha1 checksum that is derived from the previous state of the branch, and the changes applied to it. As it is not random, if two people patch the same source files of clones of branches that are in the same state (i.e. the checksum of the commit at the end of the branch is the same) then the checksum of the commit will be the same.
+    * Any patch can be referred to by the SHA1 hash, or any unique substring of it starting at char[0].
+    * Commits that merge branches still change the graph, they still have unique checksums.
+    * you can refer to a branch by repository/name, as in origin/trunk or github/HADOOP-6310
+
+
+Install and setup
+You need to install Git.This is easy on Linux, as it is the SCM system used by Linux: a lot of work on making it usable has gone on there, from a linux kernel hacker's viewpoint of "usable".
+
+ apt-get install git
+
+Also
+gitk : visualisation tool for unix/linux; good at showing branches and merges
+ apt-get install gitk
+
+stgit - stack support
+http://www.procode.org/stgit/
+Simon Metson says this helps; not played with it myself.
+
+other git tools
+http://git-wt-commit.rubyforge.org/
+Books
+Pro Git: http://progit.org/book/
+    This is the book that we like the best. Detailed, readable, covers client issues, big projects and git repository maintenance.
+
+Pragmatic Guide to git.
+    Use case driven, but too shallow and misses out some key parts of Git (how to refer to commits). Doesn't cover repository management at all, and targeted at end users.
+
+Online Reading
+Pro Git: http://progit.org/book/
+This is the book that we like the best
+http://git.or.cz/gitwiki/GitCheatSheet
+http://jan-krueger.net/development/git-cheat-sheet-extended-edition
+http://cworth.org/hgbook-git/tour/
+http://www.kernel.org/pub/software/scm/git/docs/gittutorial.html
+http://jonas.nitro.dk/git/quick-reference.html good quick ref doc
+Git Magic: http://www-cs-students.stanford.edu/~blynn/gitmagic/book.pdf
+ PDF book, also as web page: http://www-cs-students.stanford.edu/~blynn/gitmagic/
+Branching tactics: http://nvie.com/posts/a-successful-git-branching-model/
+Git merging workflow: http://sandofsky.com/blog/git-workflow.html
+Think Like a Git: http://think-like-aa-git.net/epic.html
+
+Proxy setup
+To use git at HP to connect remotely , the proxy needs to be set up either locally or globally.
+
+ 
+ git config --global http.proxy http://web-proxy:8088
+ git config --global https.proxy http://web-proxy:8088
+git config --global user.name "Steve Loughran"
+ git config --global user.email stevel@apache.org
+
+
+This is not enough for the git: protocol to work; if you issue a git clone you can do a netstat -t to see what TCP's are up. If it says
+tcp        0      1 morzine.hpl.hp.co:35734 192.87.106.249:git      SYN_SENT 
+then you know that things are broken
+
+-Laptops are trouble here, as they move from proxy to no-proxy; re-issue the relevant git config command to catch up
+
+Email addresses
+This can be done globally, with local overrides
+ git config --global user.name "Steve Loughran"
+ git config --global user.email stevel@apache.org
+for a local override, set it in the specific project
+ git config user.email steve.loughran@hp.com
+
+making an alias
+You can define shortcuts to commands, I use co as a shortcut to checkout as it is consistent with svn.  
+
+ git config --global alias.co checkout
+ git config --global alias.ci commit
+ git config --global alias.b branch
+ git config --global alias.s status
+ git config --global alias.unstage 'reset HEAD --'
+ git config --global alias.last 'log -1 HEAD'
+git config --global alias.clog "log --stat -n 1"
+
+Other options
+Turn on automatic  colouring (works on mac and unix)
+
+ git config --global color.ui auto
+
+Editor
+
+ git config --global core.editor /usr/bin/vi
+Line Endings. This matters for Windows and maybe the Mac
+  git config --global core.autocrlf true
+
+Listing
+The current settings can be listed.
+  git config --global -l
+  git config  -l
+ 
+Ignoring Files
+You can specify files to ignore by adding a .gitignore file to a directory, a file with a list of files (wildcards allowed), one per line.
+You can specify a global gitignore file with
+  git config  --global core.excludesfile ~/.gitignore-global
+//then you can edit this
+gedit ~/.gitignore-global&
+
+Basic Git operations
+You start by cloning a repository, this gives you a new local repository you can work with
+
+Changes are first staged then committed; this ensures that a git commit only commits the specific changes you want.
+To add one or more files
+git add some/files/here*
+
+To add all files that are edited
+git add -u
+This does not add any new files to the repository, which git add --all does -that can be dangerous. Do Not Use the Latter
+(advanced git add lets you select specific changes from files and other tricks. For advanced users only)
+To see what's about to be committed:
+git stats
+When you commit, you are only updating the local repository
+git commit
+* to commit to a remote server, you push
+git push
+* and to update, you pull
+git pull
+To push to a specific server you have to name it
+Listing remotes
+typing git remote on its own will list the remote repositories; -v lists the URLS too
+git remote -v
+
+github    git@github.com:steveloughran/hadoop-common.git (fetch)
+github    git@github.com:steveloughran/hadoop-common.git (push)
+origin    git://git.apache.org/hadoop-common.git (fetch)
+origin    git://git.apache.org/hadoop-common.git (push)
+
+
+
+Branching
+
+Every issue is a separate branch; separate patches. Your production source tree is the merged result of all the different branches (yes, this means refactoring can hurt, but it always has)
+You change branch with
+git checkout [branch name]
+or
+git checkout SHA1
+you can also create quick branch before checking out
+git checkout -b dirty
+git commit
+git checkout dirty
+
+Advanced Branching
+git help branch and the various documents discuss options
+
+    * "tracking" branches that somehow keep in sync with remote ones
+    * How to replay an existing branch onto a new branch, effectively moving a series of commits onto a new branch
+
+
+
+Branch Maintenance
+you can rename (move) a branch with 
+
+git branch -m branchname newname
+
+if the new branch exists, git -M will forcibly overwrite it, though deletion and rename also works
+
+to delete a branch
+
+ git branch -d branchname
+
+This will fail if the branch is not a parent of the current branch, if work will get lost. 
+
+  git branch -d old-HADOOP-6221-waitForProxy-swallows-interrupts
+error: The branch 'old-HADOOP-6221-waitForProxy-swallows-interrupts' is not an ancestor of your current HEAD.
+If you are sure you want to delete it, run 'git branch -D old-HADOOP-6221-waitForProxy-swallows-interrupts'.
+
+Use the capital D option:
+
+  git branch -D branchname
+
+  git branch -D old-HADOOP-6221-waitForProxy-swallows-interrupts
+Deleted branch old-HADOOP-6221-waitForProxy-swallows-interrupts (was e65d667).
+Converting a local branch to a tracking branch.
+Once you've pushed a local branch to a remote site, the local one is still not a "tracking" branch; it doesn't auto update from the remote site. You need to tell git to make it a tracking branch by saying what branch to track
+git branch --set-upstream master origin/master
+git branch --set-upstream HADOOP- github/HADOOP-
+Getting new branches from a remote site
+
+the standard practice here is one of
+
+   1.
+
+      Fetch everything from the remote site. This will pull in new remote branches but not create local branches to match them
+   2.
+
+      check out a local branch from the remote one
+
+git fetch github
+git co --track github/HADOOP-XYZ
+for example
+> git fetch github
+remote: Counting objects: 457, done.
+remote: Compressing objects: 100% (157/157), done.
+remote: Total 336 (delta 177), reused 257 (delta 101)
+Receiving objects: 100% (336/336), 30.01 KiB | 15 KiB/s, done.
+Resolving deltas: 100% (177/177), completed with 35 local objects.
+From github.com:steveloughran/hadoop-trunk
+* [new branch]      HADOOP-7772 -> github/HADOOP-7772
+
+> git branch
+ HADOOP-6221-trunk-interrupt-rpc
+ HDFS-2485-improve-underreplicated
+ branch-0.22
+ branch-0.23
+* trunk
+
+> git co --track github/HADOOP-7772
+Branch HADOOP-7772 set up to track remote branch HADOOP-7772 from github.
+Switched to a new branch 'HADOOP-7772'
+
+
+Merging
+Merging is a key concept in Git, and a source of errors. The key thing to know is that a git branch is a pointer to a commit. If you merge to another branch git applies different strategies
+
+Fast Forward Merge. If no changes have taken place on the destination branch that is only a a fork of the original, git just updates the pointer to point to the new version number in the branch.
+ Pros: fast.
+ Cons: requires only one branch to change.
+ If a FF doesn't take place, an alternate strategy is needed.
+
+Recursive Merge. Both branches have had commits on them. Git creates a new commit that references both parent commits;
+ Pros: fast.
+ Cons: requires the changes to be compatible.
+ If the changes are incompatible, someone needs to edit the changes until they are.
+
+Rebase. Both branches have had commits on them. Git creates a new commit that references both parent commits;
+ Pros: effectively re-applies the changes in one branch to the original; the operations propagate well across git databases.
+ Cons: you need to go through each change in a branch, manually handing failures there, to complete your work.
+Avoid Rebasing as soon as you have multiple copies of your code, as it gets too complicated.
+To merge
+ git merge branchname
+This merges in a branch and commits the merge if there are no conflicts. If there is a conflict, you get to fix the file, git add the change then git commit the full merge.
+ git merge --log branchname
+this  logs the changes of every commit in the branch into the commit message
+ git merge --no-commit branchname
+Merges the branch but does not commit
+ git merge --no-ff branchname
+Forces a merge commit to be created
+
+Rebasing
+Rebasing is powerful and dangerous.
+When a rebase takes place, all commits are replayed, and new commits created, with new checksums. This really complicates working with other people
+
+Recommendation: do not use rebase when you share changes with others, or even across machines of your own.
+Use it only for local work
+
+Forking onto GitHub
+
+You can create your own fork of the ASF project, put in branches and stuff as you desire.
+
+   1.  Create a githib login at http://github.com/ ; Add your public SSH keys
+   2.  Go to http://github.com/apache and search for the Hadoop and other apache projects you want (avro is handy alongside the others)
+   3.  For each project, fork. This gives you your own repository URL which you can then clone locally with {{{git clone}}}
+   4.  For each patch, create a new branch and commit it
+   5. Alternatively, just clone the repository: e.g. git clone https://github.com/apache/avro.git
+
+
+
+You are better off having some branches off the ASF source, other branches for your private patches and updating them separately. This appears to reduce merge conflict, as the ASF branches will only be updated from one place.
+
+Pulling from your fork onto a second machine
+If you have a second machine, you need to pull artifacts. You can do this using git over SSH, but it helps to have git in the expected place at the far end. On a mac: use symlink.
+You need to
+1. repeat the clone of any original repository
+2. add your own remote repository:
+git remote add -f github git@github.com:steveloughran/hadoop-common.git
+see: http://progit.org/book/ch2-5.html
+Working with your fork
+
+
+Basic workflow:
+
+   1. update trunk:
+      git pull apache
+   2. Update branches:
+      git merge trunk
+   3. Fix any conflicts
+   4. Submit any updated patches
+   5. Update the integration branch
+
+
+
+//switch to and check out trunk
+cd /Users/slo/Java/Hadoop/apachegit/hadoop-common
+git co trunk
+git pull apache
+//switch to a branch
+//pull in trunk
+git co HADOOP-6194-service-lifecycle-class
+git merge trunk
+git co HADOOP-6220-InterruptingJettyStartup
+git merge trunk
+
+git co HADOOP-6221-Interrupt-RPC-client
+git merge trunk
+
+git merge trunk
+see what failed:
+git status
+git co HADOOP-6220-InterruptingJettyStartup
+
+//clean publish the artifact
+ant clean mvn-install
+
+Same for HDFS
+cd /Users/slo/Java/Hadoop/apachegit/hadoop-hdfs/
+git co trunk
+git pull origin
+git co HDFS-326-service-lifecycle-hdfs
+git merge trunk
+
+ant clean-cache mvn-install test-core
+
+and mapreduce
+
+cd /Users/slo/Java/Hadoop/apachegit/hadoop-mapreduce
+
+//check for pending changes
+git status
+
+This doesn't appear to do any work. It seems that giff patch will not do anything if there are conflicts, even if g
+Creating your own remote repository
+You can create a repository locally, or for free, on github
+
+http://github.com/steveloughran/
+
+Create a new github repo
+
+http://github.com/repositories/new
+
+To work with remote repositories, you should give them a short name
+
+
+git remote add github git@github.com:steveloughran/hadoop-common.git
+
+
+then push everything
+
+git push --all --dry-run --thin github
+
+the dry run lists what's there
+{code}
+git push --all --dry-run --thin github
+To git@github.com:steveloughran/hadoop-common.git
+ * [new branch]      HADOOP-3457-IPC.client.retry.delay -> HADOOP-3457-IPC.client.retry.delay
+ * [new branch]      HADOOP-5348-ThrowableWritable -> HADOOP-5348-ThrowableWritable
+ * [new branch]      HADOOP-6220-InterruptingJettyStartup -> HADOOP-6220-InterruptingJettyStartup
+ * [new branch]      HADOOP-6221-waitForProxy-swallows-interrupts -> HADOOP-6221-waitForProxy-swallows-interrupts
+ * [new branch]      integration -> integration
+ * [new branch]      lifecycle -> lifecycle
+ * [new branch]      trunk -> trunk
+{code}
+
+Pushing out changes
+
+You could push out all branches to a r/w repository
+git push --all --thin github
+
+Avoid this when you have some branches coming in from the ASF, as it only complicates merging in later. Instead just push out the branches with your own work via
+
+git push github :
+
+For that to work you have to set up a binding, either by doing a git checkout --track earlier, or explicitly publishing a branch. This will create a new remote branch if needed
+
+git push github HADOOP-1234
+
+git push
+
+git pull github github
+
+
+The lifecycle branch is 
+
+HADOOP-6194-service-lifecycle-class
+Creating new local branches from remote branches
+Even though a git clone and git fetch will pull in all remote branches, it doesn't create a local branch for every remote one. You need to do this by hand
+//fetch the content
+git fetch github
+//look at it in detail
+git remote show github
+
+
+
+//now create a local branch tracking the remote ones
+git checkout --track github/HADOOP-5348-ThrowableWritable
+git checkout --track github/HADOOP-6194-service-lifecycle-class
+git checkout --track github/HADOOP-6220-InterruptingJettyStartup
+# see what there is
+git branch -v
+git co --track github/HADOOP-6244-timestamp-logging
+git co --track github/Integration
+git co --track github/Ivy
+git branch
+
+//For the New MR engine
+
+//hadoop-common
+git co --track origin/yahoo-merge
+
+//hadoop-mapreduce
+git co --track origin/MR-279
+
+
+Problems
+
+Stashing: You can turn your (edited) code into a new branch if you realise that you need to do that
+ "stash your changes"
+ git stash "name of changes"
+ 
+* Updating the code. Unlike SVN, where you merge the remote and local, in git you stash away your work, pull down the remote source, then apply your changes
+git stash
+git pull
+git stash pop
+
+undoing a change
+git reset --hard
+or from a specific version
+git reset --hard SHA1_HASH
+you can do this for a single file
+
+git reset --hard a48eceb62c9b5c1a5d71ee2945d9eea2ed62527b  src/test/core/org/apache/hadoop/security/TestUserGroupInformation.java
+
+
+
+Reverting checked in actions
+
+ git revert SHA1_HASH
+
+ git log
+ gives the hash
+
+reverting a change in a single file
+
+git reset --hard path1 path2 ...
+
+listing what's changed
+git status
+
+* viewing a change in a single file:
+
+git diff <path>
+
+This is a git-only diff
+
+To do a diff for an Apache bugrep
+
+git diff --no-prefix trunk > ../outgoing/
+git diff --no-prefix  > ../outgoing/
+
+git diff --no-prefix  \
+ src/java/org/apache/hadoop/security/authorize/ConfiguredPolicy.java \
+ > ../outgoing/mapreduce-439-2.patch
+
+git diff --no-prefix  \
+ src/java/org/apache/hadoop/http/HttpServer.java \
+ > ../outgoing/HADOOP-6434.patch
+
+
+git diff --no-prefix trunk > ../outgoing/HADOOP-6194.patch
+
+
+or
+
+git diff trunk..HEAD --no-prefix
+
+
+Dealing with Merge Failures
+
+This can be a real nightmare: the merge stops half way through, leaving you with a stack of things to merge. You can't change branches any more, you can't delete the branch. What to do?
+
+See: Ch03, p58 of Pro Git.
+
+ http://book.git-scm.com/3_basic_branching_and_merging.html
+Resolve conflicts
+
+Edit the conflict files, use git add to add them, finish the merge. This is the best option. IDEA is good at this
+
+Emergency Roll  Back
+
+You can go back to before you tried to merge
+
+git reset --hard
+
+This may leave files that aren't added (check with git status) , which can prevent you checking out other branches:
+
+git co trunk
+
+error: Untracked working tree file 'hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/ipc/ProtocolInfo.java' would be overwritten by merge.
+
+What to do? Force the checkout to overwrite everything
+
+git co -f trunk
+
+You
+
+
+
+
+
+Creating a patch from a single bit of changes
+
+see
+
+    * http://tomayko.com/writings/the-thing-about-git
+    * http://ariejan.net/2009/10/26/how-to-create-and-apply-a-patch-with-git/
+
+
+
+
+ * Add your changes to the staging area
+
+git diff --cached
+ 
+ 
+ Commit it
+ 
+git commit -m "MAPREDUCE-439 Hadoop JSP pages don't work under a security manager"
+
+ this gives you a message
+ 
+git commit -m "MAPREDUCE-439 Hadoop JSP pages don't work under a security manager"
+[trunk a6326c7] MAPREDUCE-439 Hadoop JSP pages don't work under a security manager
+ 1 files changed, 25 insertions(+), 0 deletions(-)
+
+and the key a6326c7
+
+Now, this commit is local; we need to push this change up to the far end
+
+
+git push
+
+Counting objects: 19, done.
+Delta compression using up to 2 threads.
+Compressing objects: 100% (6/6), done.
+Writing objects: 100% (10/10), 2.56 KiB, done.
+Total 10 (delta 5), reused 3 (delta 2)
+To git@github.com:steveloughran/hadoop-common.git
+   83fe404..a6326c7  trunk -> trunk
+
+
+Deleting a branch
+git branch -d branch-name
+ -deletes any branch that is merged in
+ 
+git branch -D branch-name
+ -deletes a branch that is not yet merged in
+  
+These only delete the local branches; they don't get pushed out to the remote sites unless you explicitly do it:
+
+
+Checking out a Remote Branch on a github repository
+
+your local branches can come from different repositories
+github/HADOOP-6056-IPv4
+git branch HADOOP-6056-IPv4 github/HADOOP-6056-IPv4
+
+
+
+Other Tricks
+Git Grep: finds keywords through the file history
+git grep xmmap
+
+Reverting a single file to the origin file
+Use git checkout and specify just the file you want
+
+git checkout origin src/java/org/apache/hadoop/security/UserGroupInformation.java
+
+git checkout origin src/test/core/org/apache/hadoop/security/TestUserGroupInformation.java
+
+Applying a patch
+
+git apply 
+
+
+Branch Integration
+
+In Git, every feature can go into its own branch, which then somehow needs to be managed. Here is the plan to do this for a single individual's work.
+
+   1. The trunk branch tracks the origin at apache.org
+   2. Every Hadoop issue has its own branch, separate patches, etc.
+   3. When a Hadoop patch is merged with trunk, that is hadoop diff branch trunk shows no difference, the patch is in SVN_TRUNK. The branch is no longer needed and can be deleted. A rebase followed by git branch -d should be the way to do this, or, if we are confident it is checked in, git branch -D.
+   4. An Integration branch will be created that contains all integration content. It will be used to merge in trunk and then all other live branches
+
+
+
+Commands
+ git merge --log trunk
+ git merge --log HADOOP-6220-InterruptingJettyStartup
+ git merge --log HADOOP-6221-Interrupt-RPC-client
+ git merge --log HADOOP-5348-ThrowableWritable
+ git merge --log HADOOP-6194-service-lifecycle-class
+ git merge --log Ivy
+
+This is the integration branch: it is used to create release artifacts, but all fixes must be applied to the specific branches where the development takes place
+
+
+Feature tracking
+
+https://issues.apache.org/jira/browse/HADOOP-6220
+
+Patch Testing
+
+How to check for javadoc and javac warnings
+
+The patch process rejects patches that add new compiler or javadoc warnings
+
+mvn clean test -DskipTests -DHadoopPatchProcess -Ptest-patch > javac-before.txt 2>&1
+
+mvn clean test javadoc:javadoc -DskipTests -Pdocs -DHadoopPatchProcess > javadoc-before.txt 2>&1
+
+#then apply your patch/switch to your test code
+
+mvn clean test -DskipTests -DHadoopPatchProcess -Ptest-patch > javac-after.txt 2>&1
+
+mvn clean test javadoc:javadoc -DskipTests -Pdocs -DHadoopPatchProcess > javadoc-after.txt 2>&1
+
+#compare the output
+
+diff javac-before.txt javac-after.txt
+
+diff javadoc-before.txt javadoc-after.txt
+
+
+
+
+
+
+
+
