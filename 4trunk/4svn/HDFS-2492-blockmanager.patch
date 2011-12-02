@@ -1,8 +1,8 @@
 diff --git hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
-index 64f76e3..1c514af 100644
+index c6675a2..4a9f03f 100644
 --- hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
 +++ hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
-@@ -66,6 +66,8 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
+@@ -64,6 +64,8 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
  import org.apache.hadoop.hdfs.server.protocol.KeyUpdateCommand;
  import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
  import org.apache.hadoop.hdfs.util.LightWeightLinkedSet;
@@ -11,7 +11,7 @@ index 64f76e3..1c514af 100644
  import org.apache.hadoop.net.Node;
  import org.apache.hadoop.util.Daemon;
  
-@@ -221,9 +223,10 @@ public class BlockManager {
+@@ -219,9 +221,10 @@ public class BlockManager {
  
      this.maxReplicationStreams = conf.getInt(DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_KEY,
                                               DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_DEFAULT);
@@ -19,7 +19,7 @@ index 64f76e3..1c514af 100644
 -                                                                             : true;
 -    
 +    DNSToSwitchMapping dnsMap = datanodeManager.getDnsToSwitchMapping();
-+    this.shouldCheckForEnoughRacks = AbstractDNSToSwitchMapping
++    this.shouldCheckForEnoughRacks = !AbstractDNSToSwitchMapping
 +        .isMappingSingleSwitch(dnsMap);
 +
      this.replicationRecheckInterval = 

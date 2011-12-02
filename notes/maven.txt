@@ -1,0 +1,25 @@
+Maven: a wrongness on the face of build systems
+
+Installing everything without tests
+
+mvn install -DskipTests
+
+Running the tests
+
+mvn test
+
+Running a single test
+
+mvn test -Dtest=SingleTest 
+
+Branch 
+
+
+Running org.apache.hadoop.hdfs.server.blockmanagement.TestBlockManager
+Tests run: 5, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 2.192 sec <<< FAILURE!
+Running org.apache.hadoop.hdfs.server.blockmanagement.TestBlocksWithNotEnoughRacks
+Tests run: 9, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 118.016 sec <<< FAILURE!
+Running org.apache.hadoop.hdfs.server.datanode.TestBlockReport
+Tests run: 7, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 57.838 sec <<< FAILURE!
+Running org.apache.hadoop.hdfs.server.datanode.TestMulitipleNNDataBlockScanner
+Tests run: 3, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 102.979 sec <<< FAILURE!
