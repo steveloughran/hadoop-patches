@@ -1,0 +1,338 @@
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
+index d2400f0..84c0dff 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
+@@ -118,7 +118,10 @@ public class LocalContainerLauncher extends AbstractService implements
+   }
+ 
+   public void stop() {
+-    eventHandlingThread.interrupt();
++    if (eventHandlingThread != null) {
++      eventHandlingThread.interrupt();
++      eventHandlingThread = null;
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
+index ba00680..64c5710 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
+@@ -144,7 +144,10 @@ public class TaskAttemptListenerImpl extends CompositeService
+   }
+ 
+   protected void stopRpcServer() {
+-    server.stop();
++    if (server != null) {
++      server.stop();
++      server = null;
++    }
+   }
+ 
+   @Override
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
+index 800dfa9..c158823 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
+@@ -641,7 +641,10 @@ public class MRAppMaster extends CompositeService {
+ 
+     @Override
+     public synchronized void stop() {
+-      ((Service)this.containerAllocator).stop();
++      if (containerAllocator != null) {
++        ((Service) this.containerAllocator).stop();
++        containerAllocator = null;
++      }
+       super.stop();
+     }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
+index ccd0345..0a8a63f 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
+@@ -79,7 +79,9 @@ public class TaskHeartbeatHandler extends AbstractService {
+   @Override
+   public void stop() {
+     stopped = true;
+-    lostTaskCheckerThread.interrupt();
++    if (lostTaskCheckerThread != null) {
++      lostTaskCheckerThread.interrupt();
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
+index 0c27d23..5ced4cb 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
+@@ -165,7 +165,10 @@ public class MRClientService extends AbstractService
+   }
+ 
+   public void stop() {
+-    server.stop();
++    if (server != null) {
++      server.stop();
++      server = null;
++    }
+     if (webApp != null) {
+       webApp.stop();
+     }
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
+index f167003..a2f0ed1 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
+@@ -167,8 +167,13 @@ public class ContainerLauncherImpl extends AbstractService implements
+   }
+ 
+   public void stop() {
+-    eventHandlingThread.interrupt();
+-    launcherPool.shutdownNow();
++    if (eventHandlingThread != null) {
++      eventHandlingThread.interrupt();
++      eventHandlingThread = null;
++    }
++    if (launcherPool != null) {
++      launcherPool.shutdownNow();
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
+index 68d9c24..a26dbd3 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
+@@ -171,35 +171,38 @@ public abstract class RMCommunicator extends AbstractService  {
+   }
+ 
+   protected void unregister() {
+-    try {
+-      FinalApplicationStatus finishState = FinalApplicationStatus.UNDEFINED;
+-      if (job.getState() == JobState.SUCCEEDED) {
+-        finishState = FinalApplicationStatus.SUCCEEDED;
+-      } else if (job.getState() == JobState.KILLED) {
+-        finishState = FinalApplicationStatus.KILLED;
+-      } else if (job.getState() == JobState.FAILED
+-          || job.getState() == JobState.ERROR) {
+-        finishState = FinalApplicationStatus.FAILED;
+-      }
+-      StringBuffer sb = new StringBuffer();
+-      for (String s : job.getDiagnostics()) {
+-        sb.append(s).append("\n");
++    if (job != null) {
++      try {
++        FinalApplicationStatus finishState = FinalApplicationStatus.UNDEFINED;
++        if (job.getState() == JobState.SUCCEEDED) {
++          finishState = FinalApplicationStatus.SUCCEEDED;
++        } else if (job.getState() == JobState.KILLED) {
++          finishState = FinalApplicationStatus.KILLED;
++        } else if (job.getState() == JobState.FAILED
++            || job.getState() == JobState.ERROR) {
++          finishState = FinalApplicationStatus.FAILED;
++        }
++        StringBuffer sb = new StringBuffer();
++        for (String s : job.getDiagnostics()) {
++          sb.append(s).append("\n");
++        }
++        LOG.info("Setting job diagnostics to " + sb.toString());
++  
++        String historyUrl = JobHistoryUtils.getHistoryUrl(getConfig(),
++            context.getApplicationID());
++        LOG.info("History url is " + historyUrl);
++  
++        FinishApplicationMasterRequest request =
++            recordFactory.newRecordInstance(FinishApplicationMasterRequest.class);
++        request.setAppAttemptId(this.applicationAttemptId);
++        request.setFinishApplicationStatus(finishState);
++        request.setDiagnostics(sb.toString());
++        request.setTrackingUrl(historyUrl);
++        scheduler.finishApplicationMaster(request);
++      } catch(Exception are) {
++        LOG.info("Exception while unregistering ", are);
+       }
+-      LOG.info("Setting job diagnostics to " + sb.toString());
+-
+-      String historyUrl = JobHistoryUtils.getHistoryUrl(getConfig(),
+-          context.getApplicationID());
+-      LOG.info("History url is " + historyUrl);
+-
+-      FinishApplicationMasterRequest request =
+-          recordFactory.newRecordInstance(FinishApplicationMasterRequest.class);
+-      request.setAppAttemptId(this.applicationAttemptId);
+-      request.setFinishApplicationStatus(finishState);
+-      request.setDiagnostics(sb.toString());
+-      request.setTrackingUrl(historyUrl);
+-      scheduler.finishApplicationMaster(request);
+-    } catch(Exception are) {
+-      LOG.info("Exception while unregistering ", are);
++      job = null;
+     }
+   }
+ 
+@@ -214,11 +217,14 @@ public abstract class RMCommunicator extends AbstractService  {
+   @Override
+   public void stop() {
+     stopped = true;
+-    allocatorThread.interrupt();
+-    try {
+-      allocatorThread.join();
+-    } catch (InterruptedException ie) {
+-      LOG.info("InterruptedException while stopping", ie);
++    if (allocatorThread != null) {
++      allocatorThread.interrupt();
++      try {
++        allocatorThread.join();
++      } catch (InterruptedException ie) {
++        LOG.info("InterruptedException while stopping", ie);
++      }
++      allocatorThread = null;
+     }
+     unregister();
+     super.stop();
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
+index da5a342..5da6132 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
+@@ -77,8 +77,14 @@ public class TaskCleanerImpl extends AbstractService implements TaskCleaner {
+   }
+ 
+   public void stop() {
+-    eventHandlingThread.interrupt();
+-    launcherPool.shutdown();
++    if (eventHandlingThread != null) {
++      eventHandlingThread.interrupt();
++      eventHandlingThread = null;
++    }
++    if (launcherPool != null) {
++      launcherPool.shutdown();
++      launcherPool = null;
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java
+index d39ed56..3094aff 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java
+@@ -264,8 +264,11 @@ public class ShuffleHandler extends AbstractService
+   @Override
+   public synchronized void stop() {
+     accepted.close().awaitUninterruptibly(10, TimeUnit.SECONDS);
+-    ServerBootstrap bootstrap = new ServerBootstrap(selector);
+-    bootstrap.releaseExternalResources();
++    if (selector != null) {
++      ServerBootstrap bootstrap = new ServerBootstrap(selector);
++      bootstrap.releaseExternalResources();
++      selector = null;
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
+index 38eff35..3ebdb5b 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
+@@ -91,11 +91,14 @@ public class DeletionService extends AbstractService {
+ 
+   @Override
+   public void stop() {
+-    sched.shutdown();
+-    try {
+-      sched.awaitTermination(10, SECONDS);
+-    } catch (InterruptedException e) {
+-      sched.shutdownNow();
++    if (sched != null) {
++      sched.shutdown();
++      try {
++        sched.awaitTermination(10, SECONDS);
++      } catch (InterruptedException e) {
++        sched.shutdownNow();
++      }
++      sched = null;
+     }
+     super.stop();
+   }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
+index 0898bb2..8d37b0b 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
+@@ -236,7 +236,10 @@ public class NodeHealthScriptRunner extends AbstractService {
+     if (!shouldRun(conf)) {
+       return;
+     }
+-    nodeHealthScriptScheduler.cancel();
++    if (nodeHealthScriptScheduler != null) {
++      nodeHealthScriptScheduler.cancel();
++      nodeHealthScriptScheduler = null;
++    }
+     if (shexec != null) {
+       Process p = shexec.getProcess();
+       if (p != null) {
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java
+index d901196..e0d306e 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java
+@@ -79,13 +79,19 @@ public class ApplicationMasterLauncher extends AbstractService implements
+   
+ 
+   public void stop() {
+-    launcherHandlingThread.interrupt();
+-    try {
+-      launcherHandlingThread.join();
+-    } catch (InterruptedException ie) {
+-      LOG.info(launcherHandlingThread.getName() + " interrupted during join ", 
+-          ie);    }
+-    launcherPool.shutdown();
++    if (launcherHandlingThread != null) {
++      launcherHandlingThread.interrupt();
++      try {
++        launcherHandlingThread.join();
++      } catch (InterruptedException ie) {
++        LOG.info(launcherHandlingThread.getName() + " interrupted during join ",
++                 ie);
++      }
++      launcherHandlingThread = null;
++    }
++    if (launcherPool != null) {
++      launcherPool.shutdown();
++    }
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/security/DelegationTokenRenewer.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/security/DelegationTokenRenewer.java
+index a7d2e45..b8ed107 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/security/DelegationTokenRenewer.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/security/DelegationTokenRenewer.java
+@@ -85,16 +85,25 @@ public class DelegationTokenRenewer extends AbstractService {
+ 
+   @Override
+   public synchronized void stop() {
+-    renewalTimer.cancel();
+-    delegationTokens.clear();
++    if (renewalTimer != null) {
++      renewalTimer.cancel();
++      renewalTimer = null;
++    }
++    if (delegationTokens != null) {
++      delegationTokens.clear();
++      delegationTokens = null;
++    }
+ 
+-    dtCancelThread.interrupt();
+-    try {
+-      dtCancelThread.join(1000);
+-    } catch (InterruptedException e) {
+-      e.printStackTrace();
++    if (dtCancelThread != null) {
++      dtCancelThread.interrupt();
++      try {
++        dtCancelThread.join(1000);
++      } catch (InterruptedException e) {
++        e.printStackTrace();
++      }
++      dtCancelThread = null;
+     }
+-    
++
+     super.stop();
+   }
+ 
