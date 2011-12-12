@@ -1,104 +1,103 @@
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
-index d2400f0..84c0dff 100644
+index d2400f0..d1fb67f 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/LocalContainerLauncher.java
-@@ -118,7 +118,10 @@ public class LocalContainerLauncher extends AbstractService implements
+@@ -118,7 +118,7 @@ public class LocalContainerLauncher extends AbstractService implements
    }
  
    public void stop() {
 -    eventHandlingThread.interrupt();
-+    if (eventHandlingThread != null) {
-+      eventHandlingThread.interrupt();
-+      eventHandlingThread = null;
-+    }
++    eventHandlingThread = interruptThread(eventHandlingThread);
      super.stop();
    }
  
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
-index ba00680..64c5710 100644
+index ba00680..56991a3 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapred/TaskAttemptListenerImpl.java
-@@ -144,7 +144,10 @@ public class TaskAttemptListenerImpl extends CompositeService
+@@ -144,7 +144,7 @@ public class TaskAttemptListenerImpl extends CompositeService
    }
  
    protected void stopRpcServer() {
 -    server.stop();
-+    if (server != null) {
-+      server.stop();
-+      server = null;
-+    }
++    server = stopIPCServer(server);
    }
  
    @Override
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
-index 800dfa9..c158823 100644
+index 800dfa9..a7564b6 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/MRAppMaster.java
-@@ -641,7 +641,10 @@ public class MRAppMaster extends CompositeService {
+@@ -641,7 +641,8 @@ public class MRAppMaster extends CompositeService {
  
      @Override
      public synchronized void stop() {
 -      ((Service)this.containerAllocator).stop();
-+      if (containerAllocator != null) {
-+        ((Service) this.containerAllocator).stop();
-+        containerAllocator = null;
-+      }
++      stopService((Service) this.containerAllocator);
++      this.containerAllocator = null;
        super.stop();
      }
  
+@@ -685,7 +686,8 @@ public class MRAppMaster extends CompositeService {
+ 
+     @Override
+     public synchronized void stop() {
+-      ((Service)this.containerLauncher).stop();
++      stopService((Service)this.containerLauncher);
++      this.containerLauncher = null;
+       super.stop();
+     }
+   }
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
-index ccd0345..0a8a63f 100644
+index ccd0345..1f74d82 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/TaskHeartbeatHandler.java
-@@ -79,7 +79,9 @@ public class TaskHeartbeatHandler extends AbstractService {
+@@ -79,7 +79,7 @@ public class TaskHeartbeatHandler extends AbstractService {
    @Override
    public void stop() {
      stopped = true;
 -    lostTaskCheckerThread.interrupt();
-+    if (lostTaskCheckerThread != null) {
-+      lostTaskCheckerThread.interrupt();
-+    }
++    lostTaskCheckerThread = interruptThread(lostTaskCheckerThread);
      super.stop();
    }
  
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
-index 0c27d23..5ced4cb 100644
+index 0c27d23..fa2166a 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/client/MRClientService.java
-@@ -165,7 +165,10 @@ public class MRClientService extends AbstractService
+@@ -165,10 +165,8 @@ public class MRClientService extends AbstractService
    }
  
    public void stop() {
 -    server.stop();
-+    if (server != null) {
-+      server.stop();
-+      server = null;
-+    }
-     if (webApp != null) {
-       webApp.stop();
-     }
+-    if (webApp != null) {
+-      webApp.stop();
+-    }
++    server = stopIPCServer(server);
++    webApp = stopWebApp(webApp);
+     super.stop();
+   }
+ 
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
-index f167003..a2f0ed1 100644
+index f167003..808db5b 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/launcher/ContainerLauncherImpl.java
-@@ -167,8 +167,13 @@ public class ContainerLauncherImpl extends AbstractService implements
+@@ -167,8 +167,11 @@ public class ContainerLauncherImpl extends AbstractService implements
    }
  
    public void stop() {
 -    eventHandlingThread.interrupt();
 -    launcherPool.shutdownNow();
-+    if (eventHandlingThread != null) {
-+      eventHandlingThread.interrupt();
-+      eventHandlingThread = null;
-+    }
++    eventHandlingThread = interruptThread(eventHandlingThread);
 +    if (launcherPool != null) {
 +      launcherPool.shutdownNow();
++      launcherPool = null;
 +    }
      super.stop();
    }
  
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
-index 68d9c24..a26dbd3 100644
+index 68d9c24..4d0c301 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/rm/RMCommunicator.java
 @@ -171,35 +171,38 @@ public abstract class RMCommunicator extends AbstractService  {
@@ -118,6 +117,8 @@ index 68d9c24..a26dbd3 100644
 -      StringBuffer sb = new StringBuffer();
 -      for (String s : job.getDiagnostics()) {
 -        sb.append(s).append("\n");
+-      }
+-      LOG.info("Setting job diagnostics to " + sb.toString());
 +    if (job != null) {
 +      try {
 +        FinalApplicationStatus finishState = FinalApplicationStatus.UNDEFINED;
@@ -134,27 +135,14 @@ index 68d9c24..a26dbd3 100644
 +          sb.append(s).append("\n");
 +        }
 +        LOG.info("Setting job diagnostics to " + sb.toString());
-+  
-+        String historyUrl = JobHistoryUtils.getHistoryUrl(getConfig(),
-+            context.getApplicationID());
-+        LOG.info("History url is " + historyUrl);
-+  
-+        FinishApplicationMasterRequest request =
-+            recordFactory.newRecordInstance(FinishApplicationMasterRequest.class);
-+        request.setAppAttemptId(this.applicationAttemptId);
-+        request.setFinishApplicationStatus(finishState);
-+        request.setDiagnostics(sb.toString());
-+        request.setTrackingUrl(historyUrl);
-+        scheduler.finishApplicationMaster(request);
-+      } catch(Exception are) {
-+        LOG.info("Exception while unregistering ", are);
-       }
--      LOG.info("Setting job diagnostics to " + sb.toString());
--
+ 
 -      String historyUrl = JobHistoryUtils.getHistoryUrl(getConfig(),
 -          context.getApplicationID());
 -      LOG.info("History url is " + historyUrl);
--
++        String historyUrl = JobHistoryUtils.getHistoryUrl(getConfig(),
++            context.getApplicationID());
++        LOG.info("History url is " + historyUrl);
+ 
 -      FinishApplicationMasterRequest request =
 -          recordFactory.newRecordInstance(FinishApplicationMasterRequest.class);
 -      request.setAppAttemptId(this.applicationAttemptId);
@@ -164,6 +152,16 @@ index 68d9c24..a26dbd3 100644
 -      scheduler.finishApplicationMaster(request);
 -    } catch(Exception are) {
 -      LOG.info("Exception while unregistering ", are);
++        FinishApplicationMasterRequest request =
++            recordFactory.newRecordInstance(FinishApplicationMasterRequest.class);
++        request.setAppAttemptId(this.applicationAttemptId);
++        request.setFinishApplicationStatus(finishState);
++        request.setDiagnostics(sb.toString());
++        request.setTrackingUrl(historyUrl);
++        scheduler.finishApplicationMaster(request);
++      } catch(Exception are) {
++        LOG.info("Exception while unregistering ", are);
++      }
 +      job = null;
      }
    }
@@ -188,20 +186,32 @@ index 68d9c24..a26dbd3 100644
      }
      unregister();
      super.stop();
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/speculate/DefaultSpeculator.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/speculate/DefaultSpeculator.java
+index ab7d23e..d932a0c 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/speculate/DefaultSpeculator.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/speculate/DefaultSpeculator.java
+@@ -206,9 +206,7 @@ public class DefaultSpeculator extends AbstractService implements
+   @Override
+   public void stop() {
+     // this could be called before background thread is established
+-    if (speculationBackgroundThread != null) {
+-      speculationBackgroundThread.interrupt();
+-    }
++    speculationBackgroundThread = interruptThread(speculationBackgroundThread);
+     super.stop();
+   }
+ 
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
-index da5a342..5da6132 100644
+index da5a342..d72cba9 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
 +++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/main/java/org/apache/hadoop/mapreduce/v2/app/taskclean/TaskCleanerImpl.java
-@@ -77,8 +77,14 @@ public class TaskCleanerImpl extends AbstractService implements TaskCleaner {
+@@ -77,8 +77,11 @@ public class TaskCleanerImpl extends AbstractService implements TaskCleaner {
    }
  
    public void stop() {
 -    eventHandlingThread.interrupt();
 -    launcherPool.shutdown();
-+    if (eventHandlingThread != null) {
-+      eventHandlingThread.interrupt();
-+      eventHandlingThread = null;
-+    }
++    eventHandlingThread = interruptThread(eventHandlingThread);
 +    if (launcherPool != null) {
 +      launcherPool.shutdown();
 +      launcherPool = null;
@@ -209,6 +219,67 @@ index da5a342..5da6132 100644
      super.stop();
    }
  
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/test/java/org/apache/hadoop/mapreduce/v2/app/MRAppBenchmark.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/test/java/org/apache/hadoop/mapreduce/v2/app/MRAppBenchmark.java
+index 0d6c7d7..1967d84 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/test/java/org/apache/hadoop/mapreduce/v2/app/MRAppBenchmark.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-app/src/test/java/org/apache/hadoop/mapreduce/v2/app/MRAppBenchmark.java
+@@ -162,7 +162,7 @@ public class MRAppBenchmark {
+ 
+       @Override
+       public void stop() {
+-        thread.interrupt();
++        thread = interruptThread(thread);
+         super.stop();
+       }
+     }
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-hs/src/main/java/org/apache/hadoop/mapreduce/v2/hs/HistoryClientService.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-hs/src/main/java/org/apache/hadoop/mapreduce/v2/hs/HistoryClientService.java
+index e987773..c1e69a6 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-hs/src/main/java/org/apache/hadoop/mapreduce/v2/hs/HistoryClientService.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-hs/src/main/java/org/apache/hadoop/mapreduce/v2/hs/HistoryClientService.java
+@@ -146,12 +146,8 @@ public class HistoryClientService extends AbstractService {
+ 
+   @Override
+   public void stop() {
+-    if (server != null) {
+-      server.stop();
+-    }
+-    if (webApp != null) {
+-      webApp.stop();
+-    }
++    server = stopIPCServer(server);
++    webApp = stopWebApp(webApp);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapred/TestClientRedirect.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapred/TestClientRedirect.java
+index 7b8916c..cfa3127 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapred/TestClientRedirect.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapred/TestClientRedirect.java
+@@ -386,7 +386,7 @@ public class TestClientRedirect {
+     }
+ 
+     public void stop() {
+-      server.stop();
++      server = stopIPCServer(server);
+       super.stop();
+       amRunning = false;
+     }
+diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapreduce/v2/MiniMRYarnCluster.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapreduce/v2/MiniMRYarnCluster.java
+index 1120413..33cf254 100644
+--- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapreduce/v2/MiniMRYarnCluster.java
++++ hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-jobclient/src/test/java/org/apache/hadoop/mapreduce/v2/MiniMRYarnCluster.java
+@@ -124,9 +124,8 @@ public class MiniMRYarnCluster extends MiniYARNCluster {
+ 
+     @Override
+     public synchronized void stop() {
+-      if (historyServer != null) {
+-        historyServer.stop();
+-      }
++      stopService(historyServer);
++      historyServer = null;
+       super.stop();
+     }
+   }
 diff --git hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java
 index d39ed56..3094aff 100644
 --- hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-shuffle/src/main/java/org/apache/hadoop/mapred/ShuffleHandler.java
@@ -227,6 +298,376 @@ index d39ed56..3094aff 100644
      super.stop();
    }
  
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/event/AsyncDispatcher.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/event/AsyncDispatcher.java
+index 8a5fcee..995f6f8 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/event/AsyncDispatcher.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/event/AsyncDispatcher.java
+@@ -105,6 +105,7 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
+       } catch (InterruptedException ie) {
+         LOG.debug("Interrupted Exception while stopping", ie);
+       }
++      eventHandlingThread = null;
+     }
+ 
+     // stop all the components
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
+index 60bab5d..b6cad35 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
+@@ -24,18 +24,43 @@ import java.util.List;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.ipc.Server;
++import org.apache.hadoop.yarn.webapp.WebApp;
+ 
+ public abstract class AbstractService implements Service {
+ 
+   private static final Log LOG = LogFactory.getLog(AbstractService.class);
+-  
++
++  /**
++   * Service state: initially {@link STATE#NOTINITED}.
++   */
+   private STATE state = STATE.NOTINITED;
++
++  /**
++   * Service name.
++   */
+   private final String name;
++  /**
++   * Service start time. Will be zero until the service is started.
++   */
+   private long startTime;
++
++  /**
++   * The configuration. Will be null until the service is initialized.
++   */
+   private Configuration config;
+-  private List<ServiceStateChangeListener> listeners =
++
++  /**
++   * List of state change listeners; it is final to ensure
++   * that it will never be null.
++   */
++  private final List<ServiceStateChangeListener> listeners =
+     new ArrayList<ServiceStateChangeListener>();
+ 
++  /**
++   * Construct the service.
++   * @param name service name
++   */
+   public AbstractService(String name) {
+     this.name = name;
+   }
+@@ -45,6 +70,11 @@ public abstract class AbstractService implements Service {
+     return state;
+   }
+ 
++  /**
++   * {@inheritDoc}
++   * @throws IllegalStateException if the current service state does not permit
++   * this action
++   */
+   @Override
+   public synchronized void init(Configuration conf) {
+     ensureCurrentState(STATE.NOTINITED);
+@@ -53,14 +83,24 @@ public abstract class AbstractService implements Service {
+     LOG.info("Service:" + getName() + " is inited.");
+   }
+ 
++  /**
++   * {@inheritDoc}
++   * @throws IllegalStateException if the current service state does not permit
++   * this action
++   */
+   @Override
+   public synchronized void start() {
+-    startTime = System.currentTimeMillis();
+     ensureCurrentState(STATE.INITED);
++    startTime = System.currentTimeMillis();
+     changeState(STATE.STARTED);
+     LOG.info("Service:" + getName() + " is started.");
+   }
+ 
++  /**
++   * {@inheritDoc}
++   * @throws IllegalStateException if the current service state does not permit
++   * this action
++   */
+   @Override
+   public synchronized void stop() {
+     if (state == STATE.STOPPED ||
+@@ -100,6 +140,12 @@ public abstract class AbstractService implements Service {
+     return startTime;
+   }
+ 
++  /**
++   * Verify that that a service is in a given state.
++   * @param currentState the desired state
++   * @throws IllegalStateException if the service state is different from
++   * the desired state
++   */
+   private void ensureCurrentState(STATE currentState) {
+     if (state != currentState) {
+       throw new IllegalStateException("For this operation, current State must " +
+@@ -107,6 +153,14 @@ public abstract class AbstractService implements Service {
+     }
+   }
+ 
++  /**
++   * Change to a new state and notify all listeners.
++   * This is a private method that is only invoked from synchronized methods,
++   * which avoid having to clone the listener list. It does imply that
++   * the state change listener methods should be short lived, as they
++   * will delay the state transition.
++   * @param newState new service state
++   */
+   private void changeState(STATE newState) {
+     state = newState;
+     //notify listeners
+@@ -114,4 +168,89 @@ public abstract class AbstractService implements Service {
+       l.stateChanged(this);
+     }
+   }
++
++
++  /**
++   * Provide the service name and state in the toString() operator.
++   * @return the service name and state
++   */
++  @Override
++  public String toString() {
++    return "Service " + getName() + " in state " + state;
++  }
++
++  /**
++   * Helper method for safely interrupting threads during shutdown.
++   * If the target is non null, it will be interrupted. The return
++   * value will always be null. This permits a use such as
++   * <pre>
++   *   workerThread = interruptThread(workerThread);
++   * </pre>
++   * Such a line will interrupt the worker thread if it is not null,
++   * and guarantee that the field will be null afterwards.
++   * @param target target thread -this may be null
++   * @return null, always
++   */
++  protected static Thread interruptThread(Thread target) {
++    if (target != null) {
++      target.interrupt();
++    }
++    return null;
++  }
++
++  /**
++   * Helper method to safely stop an IPC server if not null.
++   * @param target the target server
++   * @return null, always
++   */
++  protected static Server stopIPCServer(Server target) {
++    if (target != null) {
++      target.stop();
++    }
++    return null;
++  }
++
++  /**
++   * Helper method to safely stop a webapp if not null.
++   * @param target the target server
++   * @return null, always
++   */
++  protected static WebApp stopWebApp(WebApp target) {
++    if (target != null) {
++      target.stop();
++    }
++    return null;
++  }
++
++  /**
++  * Stop a service; if it is null do nothing.
++  *
++  * @param service a service
++  */
++  public static void stopService(Service service) {
++    if (service != null) {
++      service.stop();
++    }
++  }
++
++  /**
++   * Stop a service; if it is null do nothing.
++   * Exceptions are caught and logged
++   * (but not Throwables). This operation is intended to be used in cleanup
++   * operations
++   *
++   * @param service a service; may be null
++   */
++  public static void stopServiceQuietly(Service service) {
++    if (service != null) {
++      try {
++        service.stop();
++      } catch (Exception e) {
++        LOG.warn("When stopping the service " + service.getName()
++                     + " : " + e,
++                     e);
++      }
++    }
++  }
++
+ }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/Service.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/Service.java
+index 722dd55..23da837 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/Service.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/Service.java
+@@ -25,21 +25,87 @@ import org.apache.hadoop.conf.Configuration;
+  */
+ public interface Service {
+ 
++  /**
++   * Service states
++   */
+   public enum STATE {
++    /** Constructed but not initialized */
+     NOTINITED,
++
++    /** Initialized but not started or stopped */
+     INITED,
++
++    /** started and not stopped */
+     STARTED,
+-    STOPPED;
++
++    /** stopped. No further state transitions are permitted */
++    STOPPED
+   }
+ 
++  /**
++   * Initialize the service.
++   *
++   * The transition must be from {@link STATE#NOTINITED} to {@link STATE#INITED}
++   * unless the operation failed and an exception was raised.
++   * @param config the configuration of the service
++   */
+   void init(Configuration config);
++
++
++  /**
++   * Start the service.
++   *
++   * The transition should be from {@link STATE#INITED} to {@link STATE#STARTED}
++   * unless the operation failed and an exception was raised.
++   */
++
+   void start();
++
++  /**
++   * Stop the service.
++   *
++   * This operation must be designed to complete regardless of the initial state
++   * of the service, including the state of all its internal fields. 
++   */
+   void stop();
++
++  /**
++   * Register an instance of the service state change events.
++   * @param listener a new listener
++   */
+   void register(ServiceStateChangeListener listener);
++
++  /**
++   * Unregister a previously instance of the service state change events.
++   * @param listener the listener to unregister.
++   */
+   void unregister(ServiceStateChangeListener listener);
+ 
++  /**
++   * Get the name of this service.
++   * @return the service name
++   */
+   String getName();
++
++  /**
++   * Get the configuration of this service.
++   * This is normally not a clone and may be manipulated, though there are no
++   * guarantees as to what the consequences of such actions may be
++   * @return the current configuration, unless a specific implentation chooses
++   * otherwise.
++   */
+   Configuration getConfig();
++
++  /**
++   * Get the current service state
++   * @return the state of the service
++   */
+   STATE getServiceState();
++
++  /**
++   * Get the service start time
++   * @return the start time of the service. This will be zero if the service
++   * has not yet been started.
++   */
+   long getStartTime();
+ }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceStateChangeListener.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceStateChangeListener.java
+index cf10a6c..99eb41c 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceStateChangeListener.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceStateChangeListener.java
+@@ -23,6 +23,23 @@ package org.apache.hadoop.yarn.service;
+  */
+ public interface ServiceStateChangeListener {
+ 
++  /**
++   * Callback to notify of a state change. The service will already
++   * have changed state before this callback is invoked.
++   *
++   * This operation is invoked on the thread that initiated the state change,
++   * while the service itself in in a sychronized section. 
++   * <ol>
++   *   <li>Any long-lived operation here will prevent the service state
++   *   change from completing in a timely manner.</li>
++   *   <li>If another thread is somehow invoked from the listener, and
++   *   that thread invokes the methods of the service (including 
++   *   subclass-specific methods), there is a risk of a deadlock.</li>
++   * </ol>
++   *
++   *
++   * @param service the service that has changed.
++   */
+   void stateChanged(Service service);
+ 
+ }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
+index b46ad3e..b1e79d1 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
+@@ -60,9 +60,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
+   @Override
+   public void stop() {
+     stopped = true;
+-    if (checkerThread != null) {
+-      checkerThread.interrupt();
+-    }
++    checkerThread = interruptThread(checkerThread);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/util/TestCompositeService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/util/TestCompositeService.java
+index 9ca0e4b..9cd8325 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/util/TestCompositeService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/util/TestCompositeService.java
+@@ -226,11 +226,6 @@ public class TestCompositeService {
+       this.throwExceptionOnStop = throwExceptionOnStop;
+     }
+ 
+-    @Override
+-    public String toString() {
+-      return "Service " + getName();
+-    }
+-
+   }
+ 
+   public static class ServiceManager extends CompositeService {
 diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
 index 38eff35..3ebdb5b 100644
 --- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
@@ -251,6 +692,18 @@ index 38eff35..3ebdb5b 100644
      }
      super.stop();
    }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
+index 52e8600..aa582de 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
+@@ -159,6 +159,7 @@ public class LocalDirsHandlerService extends AbstractService {
+   public void stop() {
+     if (dirsHandlerScheduler != null) {
+       dirsHandlerScheduler.cancel();
++      dirsHandlerScheduler = null;
+     }
+     super.stop();
+   }
 diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
 index 0898bb2..8d37b0b 100644
 --- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
@@ -267,6 +720,126 @@ index 0898bb2..8d37b0b 100644
      if (shexec != null) {
        Process p = shexec.getProcess();
        if (p != null) {
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
+index 615b825..0a669fd 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
+@@ -266,9 +266,7 @@ public class ContainerManagerImpl extends CompositeService implements
+     if (auxiliaryServices.getServiceState() == STARTED) {
+       auxiliaryServices.unregister(this);
+     }
+-    if (server != null) {
+-      server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
+index 744c2b1..26730d6 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
+@@ -268,9 +268,7 @@ public class ResourceLocalizationService extends CompositeService
+ 
+   @Override
+   public void stop() {
+-    if (server != null) {
+-      server.stop();
+-    }
++    server = stopIPCServer(server);
+     cacheCleanup.shutdown();
+     super.stop();
+   }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
+index f0d8741..8ae40ca 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
+@@ -73,9 +73,7 @@ public class WebServer extends AbstractService {
+ 
+   @Override
+   public synchronized void stop() {
+-    if (this.webApp != null) {
+-      this.webApp.stop();
+-    }
++    webApp = stopWebApp(webApp);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/AdminService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/AdminService.java
+index c2a9018..3c362ec 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/AdminService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/AdminService.java
+@@ -128,9 +128,7 @@ public class AdminService extends AbstractService implements RMAdminProtocol {
+ 
+   @Override
+   public void stop() {
+-    if (this.server != null) {
+-      this.server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ApplicationMasterService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ApplicationMasterService.java
+index 175542c..870ee55 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ApplicationMasterService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ApplicationMasterService.java
+@@ -312,9 +312,7 @@ public class ApplicationMasterService extends AbstractService implements
+   
+   @Override
+   public void stop() {
+-    if (this.server != null) {
+-      this.server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+ }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ClientRMService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ClientRMService.java
+index b19c1c1..12645a9 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ClientRMService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ClientRMService.java
+@@ -430,9 +430,7 @@ public class ClientRMService extends AbstractService implements
+   
+   @Override
+   public void stop() {
+-    if (this.server != null) {
+-        this.server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+   
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceManager.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceManager.java
+index 9152317..c2b0026 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceManager.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceManager.java
+@@ -456,9 +456,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
+ 
+   @Override
+   public void stop() {
+-    if (webApp != null) {
+-      webApp.stop();
+-    }
++    webApp = stopWebApp(webApp);
+ 
+     /*synchronized(shutdown) {
+       shutdown.set(true);
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceTrackerService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceTrackerService.java
+index a01a0bf..987bbd3 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceTrackerService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/ResourceTrackerService.java
+@@ -140,9 +140,7 @@ public class ResourceTrackerService extends AbstractService implements
+ 
+   @Override
+   public synchronized void stop() {
+-    if (this.server != null) {
+-      this.server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+ 
 diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java
 index d901196..e0d306e 100644
 --- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/amlauncher/ApplicationMasterLauncher.java
@@ -336,3 +909,16 @@ index a7d2e45..b8ed107 100644
      super.stop();
    }
  
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-web-proxy/src/main/java/org/apache/hadoop/yarn/server/webproxy/WebAppProxy.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-web-proxy/src/main/java/org/apache/hadoop/yarn/server/webproxy/WebAppProxy.java
+index 0fd8e29..305387b 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-web-proxy/src/main/java/org/apache/hadoop/yarn/server/webproxy/WebAppProxy.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-web-proxy/src/main/java/org/apache/hadoop/yarn/server/webproxy/WebAppProxy.java
+@@ -104,6 +104,8 @@ public class WebAppProxy extends AbstractService {
+       } catch (Exception e) {
+         LOG.fatal("Error stopping proxy web server", e);
+         throw new YarnException("Error stopping proxy web server",e);
++      } finally {
++        proxyServer = null;
+       }
+     }
+     super.stop();
