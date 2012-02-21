@@ -1,5 +1,5 @@
 diff --git hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
-index c6675a2..4a9f03f 100644
+index 45aefaf..46b5cd9 100644
 --- hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
 +++ hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/BlockManager.java
 @@ -64,6 +64,8 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
@@ -11,25 +11,33 @@ index c6675a2..4a9f03f 100644
  import org.apache.hadoop.net.Node;
  import org.apache.hadoop.util.Daemon;
  
-@@ -219,9 +221,10 @@ public class BlockManager {
+@@ -216,9 +218,11 @@ public class BlockManager {
  
      this.maxReplicationStreams = conf.getInt(DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_KEY,
                                               DFSConfigKeys.DFS_NAMENODE_REPLICATION_MAX_STREAMS_DEFAULT);
 -    this.shouldCheckForEnoughRacks = conf.get(DFSConfigKeys.NET_TOPOLOGY_SCRIPT_FILE_NAME_KEY) == null ? false
 -                                                                             : true;
--    
 +    DNSToSwitchMapping dnsMap = datanodeManager.getDnsToSwitchMapping();
 +    this.shouldCheckForEnoughRacks = !AbstractDNSToSwitchMapping
 +        .isMappingSingleSwitch(dnsMap);
+     
 +
      this.replicationRecheckInterval = 
        conf.getInt(DFSConfigKeys.DFS_NAMENODE_REPLICATION_INTERVAL_KEY, 
                    DFSConfigKeys.DFS_NAMENODE_REPLICATION_INTERVAL_DEFAULT) * 1000L;
+@@ -227,6 +231,7 @@ public class BlockManager {
+     LOG.info("minReplication     = " + minReplication);
+     LOG.info("maxReplicationStreams      = " + maxReplicationStreams);
+     LOG.info("shouldCheckForEnoughRacks  = " + shouldCheckForEnoughRacks);
++    LOG.info("topology mapper = " + dnsMap);
+     LOG.info("replicationRecheckInterval = " + replicationRecheckInterval);
+   }
+ 
 diff --git hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
-index 33b648c..64b517c 100644
+index 5d795e7..997d9fd 100644
 --- hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
 +++ hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
-@@ -945,4 +945,12 @@ public class DatanodeManager {
+@@ -947,4 +947,12 @@ public class DatanodeManager {
        }
      }
    }

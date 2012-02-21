@@ -1,0 +1,384 @@
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java
+new file mode 100644
+index 0000000..5907f39
+--- /dev/null
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java
+@@ -0,0 +1,123 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++package org.apache.hadoop.yarn.service;
++
++import org.apache.hadoop.conf.Configuration;
++
++/**
++ * This is a service that can be configured to break on any of the lifecycle
++ * events, so test the failure handling of other parts of the service
++ * infrastructure.
++ *
++ * It retains a counter to the number of times each entry point is called -
++ * these counters are incremented before the exceptions are raised and
++ * before the superclass state methods are invoked.
++ *
++ */
++
++
++public class BreakableService extends AbstractService {
++
++  private boolean failOnInit;
++  private boolean failOnStart;
++  private boolean failOnStop;
++  private int[] counts = new int[4];
++
++  public BreakableService() {
++    this(false, false, false);
++  }
++
++  public BreakableService(boolean failOnInit,
++                          boolean failOnStart,
++                          boolean failOnStop) {
++    super("BreakableService");
++    this.failOnInit = failOnInit;
++    this.failOnStart = failOnStart;
++    this.failOnStop = failOnStop;
++    inc(STATE.NOTINITED);
++  }
++
++  private int convert(STATE state) {
++    switch (state) {
++      case NOTINITED: return 0;
++      case INITED:    return 1;
++      case STARTED:   return 2;
++      case STOPPED:   return 3;
++      default:        return 0;
++    }
++  }
++
++  private void inc(STATE state) {
++    int index = convert(state);
++    counts[index] ++;
++  }
++
++  public int getCount(STATE state) {
++    return counts[convert(state)];
++  }
++
++  private void maybeFail(boolean fail, String action) {
++    if (fail) {
++      throw new BrokenLifecycleEvent(action);
++    }
++  }
++
++  @Override
++  public void init(Configuration conf) {
++    inc(STATE.INITED);
++    maybeFail(failOnInit, "init");
++    super.init(conf);
++  }
++
++  @Override
++  public void start() {
++    inc(STATE.STARTED);
++    maybeFail(failOnStart, "start");
++    super.start();
++  }
++
++  @Override
++  public void stop() {
++    inc(STATE.STOPPED);
++    maybeFail(failOnStop, "stop");
++    super.stop();
++  }
++
++  public void setFailOnInit(boolean failOnInit) {
++    this.failOnInit = failOnInit;
++  }
++
++  public void setFailOnStart(boolean failOnStart) {
++    this.failOnStart = failOnStart;
++  }
++
++  public void setFailOnStop(boolean failOnStop) {
++    this.failOnStop = failOnStop;
++  }
++
++  /**
++   * The exception explicitly raised on a failure
++   */
++  public static class BrokenLifecycleEvent extends RuntimeException {
++    BrokenLifecycleEvent(String action) {
++      super("Lifecycle Failure during " + action);
++    }
++  }
++}
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java
+new file mode 100644
+index 0000000..7a45aa3
+--- /dev/null
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java
+@@ -0,0 +1,49 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.yarn.service;
++
++import org.junit.Assert;
++
++/**
++ * A set of assertions about the state of any service
++ */
++public class ServiceAssert extends Assert {
++
++  public static void assertServiceStateCreated(Service service) {
++    assertServiceInState(service, Service.STATE.NOTINITED);
++  }
++
++  public static void assertServiceStateInited(Service service) {
++    assertServiceInState(service, Service.STATE.INITED);
++  }
++
++  public static void assertServiceStateStarted(Service service) {
++    assertServiceInState(service, Service.STATE.STARTED);
++  }
++
++  public static void assertServiceStateStopped(Service service) {
++    assertServiceInState(service, Service.STATE.STOPPED);
++  }
++
++  public static void assertServiceInState(Service service, Service.STATE state) {
++    assertNotNull("Null service", service);
++    assertEquals("Service in wrong state: " + service, state,
++                 service.getServiceState());
++  }
++}
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestServiceLifecycle.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestServiceLifecycle.java
+new file mode 100644
+index 0000000..7c9655e
+--- /dev/null
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestServiceLifecycle.java
+@@ -0,0 +1,194 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++package org.apache.hadoop.yarn.service;
++
++import org.apache.hadoop.conf.Configuration;
++import org.junit.Test;
++
++public class TestServiceLifecycle extends ServiceAssert {
++
++  void assertStateCount(BreakableService service,
++                        Service.STATE state,
++                        int expected) {
++    int actual = service.getCount(state);
++    if (expected != actual) {
++      fail("Expected entry count for state [" + state +"] of " + service
++               + " to be " + expected + " but was " + actual);
++    }
++  }
++
++
++  @Test
++  public void testWalkthrough() throws Throwable {
++
++    BreakableService svc = new BreakableService();
++    assertServiceStateCreated(svc);
++    assertStateCount(svc, Service.STATE.NOTINITED, 1);
++    assertStateCount(svc, Service.STATE.INITED, 0);
++    assertStateCount(svc, Service.STATE.STARTED, 0);
++    assertStateCount(svc, Service.STATE.STOPPED, 0);
++    svc.init(new Configuration());
++    assertServiceStateInited(svc);
++    assertStateCount(svc, Service.STATE.INITED, 1);
++    svc.start();
++    assertServiceStateStarted(svc);
++    assertStateCount(svc, Service.STATE.STARTED, 1);
++    svc.stop();
++    assertServiceStateStopped(svc);
++    assertStateCount(svc, Service.STATE.STOPPED, 1);
++  }
++
++  /**
++   * call init twice
++   * @throws Throwable
++   */
++  @Test
++  public void testInitTwice() throws Throwable {
++    BreakableService svc = new BreakableService();
++    svc.init(new Configuration());
++    try {
++      svc.init(new Configuration());
++      fail("Expected a failure, got " + svc);
++    } catch (IllegalStateException e) {
++      //expected
++    }
++    assertStateCount(svc, Service.STATE.INITED, 2);
++  }
++
++  /**
++   * call start twice
++   * @throws Throwable
++   */
++  @Test
++  public void testStartTwice() throws Throwable {
++    BreakableService svc = new BreakableService();
++    svc.init(new Configuration());
++    svc.start();
++    try {
++      svc.start();
++      fail("Expected a failure, got " + svc);
++    } catch (IllegalStateException e) {
++      //expected
++    }
++    assertStateCount(svc, Service.STATE.STARTED, 2);
++  }
++
++
++  /**
++   * verify that when a service is stopped more than once, no exception
++   * is thrown, and the counter is incremented
++   * this is because the state change operations happen after the counter in
++   * the subclass is incremented, even though stop is meant to be a no-op
++   * @throws Throwable
++   */
++  @Test
++  public void testStopTwice() throws Throwable {
++    BreakableService svc = new BreakableService();
++    svc.init(new Configuration());
++    svc.start();
++    svc.stop();
++    assertStateCount(svc, Service.STATE.STOPPED, 1);
++    svc.stop();
++    assertStateCount(svc, Service.STATE.STOPPED, 2);
++  }
++
++
++  /**
++   * Show that if the service failed during an init
++   * operation, it stays in the created state, even after stopping it
++   * @throws Throwable
++   */
++
++  @Test
++  public void testStopFailedInit() throws Throwable {
++    BreakableService svc = new BreakableService(true, false, false);
++    assertServiceStateCreated(svc);
++    try {
++      svc.init(new Configuration());
++      fail("Expected a failure, got " + svc);
++    } catch (BreakableService.BrokenLifecycleEvent e) {
++      //expected
++    }
++    //the service state wasn't passed
++    assertServiceStateCreated(svc);
++    assertStateCount(svc, Service.STATE.INITED, 1);
++    //now try to stop
++    svc.stop();
++    //even after the stop operation, we haven't entered the state
++    assertServiceStateCreated(svc);
++  }
++
++
++  /**
++   * Show that if the service failed during an init
++   * operation, it stays in the created state, even after stopping it
++   * @throws Throwable
++   */
++
++  @Test
++  public void testStopFailedStart() throws Throwable {
++    BreakableService svc = new BreakableService(false, true, false);
++    svc.init(new Configuration());
++    assertServiceStateInited(svc);
++    try {
++      svc.start();
++      fail("Expected a failure, got " + svc);
++    } catch (BreakableService.BrokenLifecycleEvent e) {
++      //expected
++    }
++    //the service state wasn't passed
++    assertServiceStateInited(svc);
++    assertStateCount(svc, Service.STATE.INITED, 1);
++    //now try to stop
++    svc.stop();
++    //even after the stop operation, we haven't entered the state
++    assertServiceStateInited(svc);
++  }
++
++  /**
++   * verify that when a service is stopped more than once, no exception
++   * is thrown, and the counter is incremented
++   * this is because the state change operations happen after the counter in
++   * the subclass is incremented, even though stop is meant to be a no-op
++   * @throws Throwable
++   */
++  @Test
++  public void testFailingStop() throws Throwable {
++    BreakableService svc = new BreakableService(false, false, true);
++    svc.init(new Configuration());
++    svc.start();
++    try {
++      svc.stop();
++      fail("Expected a failure, got " + svc);
++    } catch (BreakableService.BrokenLifecycleEvent e) {
++      //expected
++    }
++    assertStateCount(svc, Service.STATE.STOPPED, 1);
++    //now try again, and expect it to happen again
++    try {
++      svc.stop();
++      fail("Expected a failure, got " + svc);
++    } catch (BreakableService.BrokenLifecycleEvent e) {
++      //expected
++    }
++    assertStateCount(svc, Service.STATE.STOPPED, 2);
++  }
++
++}
