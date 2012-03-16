@@ -1,0 +1,575 @@
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
+index eeea1e1..f5a28eb 100644
+--- a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/AbstractService.java
+@@ -24,6 +24,8 @@ import java.util.List;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.ipc.Server;
++import org.apache.hadoop.yarn.webapp.WebApp;
+ 
+ public abstract class AbstractService implements Service {
+ 
+@@ -144,7 +146,7 @@ public abstract class AbstractService implements Service {
+    * @throws IllegalStateException if the service state is different from
+    * the desired state
+    */
+-  private void ensureCurrentState(STATE currentState) {
++  protected void ensureCurrentState(STATE currentState) {
+     ServiceOperations.ensureCurrentState(state, currentState);
+   }
+ 
+@@ -163,4 +165,104 @@ public abstract class AbstractService implements Service {
+       l.stateChanged(this);
+     }
+   }
++
++
++  /**
++   * Provide the service name and state in the toString() operator.
++   * @return the service name and state
++   */
++  @Override
++  public String toString() {
++    return "Service " + super.toString()
++        + " name \"" + (getName() != null? getName() : "") + ""
++        + " in state " + state;
++  }
++
++  /**
++   * Stop a service; if it is null do nothing.
++   *
++   * @param service a service
++   */
++  protected static void stopService(Service service) {
++    ServiceOperations.stop(service);
++  }
++
++  /**
++   * Stop a service; if it is null do nothing.
++   * Exceptions are caught and logged
++   * (but not Throwables). This operation is intended to be used in cleanup
++   * operations
++   *
++   * @param service a service; may be null
++   * @return any exception that was caught
++   */
++  public static Exception stopServiceQuietly(Service service) {
++    return ServiceOperations.stopQuietly(service);
++  }
++
++  /**
++   * Helper method for safely interrupting threads during shutdown.
++   * If the target is non null, it will be interrupted. The return
++   * value will always be null. This permits a use such as
++   * <pre>
++   *   workerThread = interruptThread(workerThread);
++   * </pre>
++   * Such a line will interrupt the worker thread if it is not null,
++   * and guarantee that the field will be null afterwards.
++   * @param target target thread -this may be null
++   * @return null, always
++   */
++  protected static Thread interruptThread(Thread target) {
++    if (target != null) {
++      target.interrupt();
++    }
++    return null;
++  }
++
++  /**
++   * Helper method for safely interrupting threads during shutdown.
++   * If the target is non null, it will be interrupted -then the caller
++   * uses {@link Thread#join()} to wait for it to finish -or for
++   * the wait to be interrupted.
++   *
++   * @param target target thread -this may be null
++   * @return null, always
++   */
++  protected static Thread interruptAndJoinThread(Thread target) {
++    if (target != null) {
++      target.interrupt();
++      try {
++        target.join();
++      } catch (InterruptedException ie) {
++        LOG.info(target.getName() + " interrupted during join ",
++                 ie);
++      }
++    }
++    return null;
++  }
++
++  /**
++   * Helper method to safely stop an IPC server if not null.
++   * @param target the target server
++   * @return null, always
++   */
++  protected static Server stopIPCServer(Server target) {
++    if (target != null) {
++      target.stop();
++    }
++    return null;
++  }
++
++  /**
++   * Helper method to safely stop a webapp if not null.
++   * @param target the target server
++   * @return null, always
++   */
++  protected static WebApp stopWebApp(WebApp target) {
++    if (target != null) {
++      target.stop();
++    }
++    return null;
++  }
++
+ }
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceOperations.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceOperations.java
+index 151caa9..7ec1fd6 100644
+--- a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceOperations.java
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/service/ServiceOperations.java
+@@ -27,7 +27,7 @@ import org.apache.hadoop.conf.Configuration;
+  * to walk them through their lifecycle.
+  */
+ public final class ServiceOperations {
+-  private static final Log LOG = LogFactory.getLog(AbstractService.class);
++  private static final Log LOG = LogFactory.getLog(ServiceOperations.class);
+ 
+   private ServiceOperations() {
+   }
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
+index b46ad3e..d8f9f5b 100644
+--- a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/util/AbstractLivelinessMonitor.java
+@@ -50,6 +50,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
+ 
+   @Override
+   public void start() {
++    ensureCurrentState(STATE.INITED);
+     assert !stopped : "starting when already stopped";
+     checkerThread = new Thread(new PingChecker());
+     checkerThread.setName("Ping Checker");
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java
+index 5907f39..991c86f 100644
+--- a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/BreakableService.java
+@@ -20,6 +20,7 @@
+ package org.apache.hadoop.yarn.service;
+ 
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.yarn.YarnException;
+ 
+ /**
+  * This is a service that can be configured to break on any of the lifecycle
+@@ -44,10 +45,20 @@ public class BreakableService extends AbstractService {
+     this(false, false, false);
+   }
+ 
++  public BreakableService(String name) {
++    this(name, false, false, false);
++  }
++
+   public BreakableService(boolean failOnInit,
+                           boolean failOnStart,
+                           boolean failOnStop) {
+-    super("BreakableService");
++    this("BreakableService", failOnInit, failOnStart, failOnStop);
++  }
++  public BreakableService(String name,
++                          boolean failOnInit,
++                          boolean failOnStart,
++                          boolean failOnStop) {
++    super(name);
+     this.failOnInit = failOnInit;
+     this.failOnStart = failOnStart;
+     this.failOnStop = failOnStop;
+@@ -75,7 +86,7 @@ public class BreakableService extends AbstractService {
+ 
+   private void maybeFail(boolean fail, String action) {
+     if (fail) {
+-      throw new BrokenLifecycleEvent(action);
++      throw new BrokenLifecycleEvent(this, action);
+     }
+   }
+ 
+@@ -115,9 +126,16 @@ public class BreakableService extends AbstractService {
+   /**
+    * The exception explicitly raised on a failure
+    */
+-  public static class BrokenLifecycleEvent extends RuntimeException {
+-    BrokenLifecycleEvent(String action) {
++  public static class BrokenLifecycleEvent extends YarnException {
++    final Service service;
++
++    BrokenLifecycleEvent(Service service, String action) {
+       super("Lifecycle Failure during " + action);
++      this.service = service;
++    }
++
++    public Service getService() {
++      return service;
+     }
+   }
+ }
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java
+index cfa7948..dfed26c 100644
+--- a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/ServiceAssert.java
+@@ -60,7 +60,8 @@ public class ServiceAssert extends Assert {
+     assertNotNull("Null service", service);
+     int actual = service.getCount(state);
+     if (expected != actual) {
+-      fail("Expected entry count for state [" + state +"] of " + service
++      fail("Expected entry count for state [" + state
++               +"] of service [" + service.getName() +"]"
+                + " to be " + expected + " but was " + actual);
+     }
+   }
+@@ -74,6 +75,7 @@ public class ServiceAssert extends Assert {
+   public static void assertServiceConfigurationContains(Service service,
+                                                         String key) {
+     assertNotNull("No option "+ key + " in service configuration",
+-                  service.getConfig().get(key));
++                  service.getConfig().get(key)
++                  + " of service [" +  service.getName() + "]");
+   }
+ }
+diff --git a/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestCompositeServiceLifecycle.java b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestCompositeServiceLifecycle.java
+new file mode 100644
+index 0000000..23588dc
+--- /dev/null
++++ b/hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/test/java/org/apache/hadoop/yarn/service/TestCompositeServiceLifecycle.java
+@@ -0,0 +1,332 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++package org.apache.hadoop.yarn.service;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.yarn.YarnException;
++import org.junit.Test;
++
++/**
++ * These tests see how well the composite service manages its children
++ */
++public class TestCompositeServiceLifecycle extends ServiceAssert {
++
++  /**
++   * call init twice
++   * @throws Throwable if necessary
++   */
++  @Test
++  public void testWalkthrough() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    BreakableService lastChild = new BreakableService("last");
++    CompositeService svc = new CompositeService("testWalkthrough");
++    svc.addService(firstChild);
++    svc.addService(lastChild);
++    Configuration conf = new Configuration();
++    conf.set("test.init","t");
++
++    svc.init(conf);
++
++    assertServiceStateInited(svc);
++    assertServiceStateInited(firstChild);
++    assertServiceStateInited(lastChild);
++
++    svc.start();
++
++    assertServiceStateStarted(svc);
++    assertServiceStateStarted(firstChild);
++    assertServiceStateStarted(lastChild);
++
++    svc.stop();
++
++    assertServiceStateStopped(svc);
++    assertServiceStateStopped(firstChild);
++    assertServiceStateStopped(lastChild);
++
++    //verify the configuration did not change
++    assertServiceConfigurationContains(svc, "test.init");
++    assertServiceConfigurationContains(firstChild, "test.init");
++    assertServiceConfigurationContains(lastChild, "test.init");
++
++    //delete from one service -MAPREDUCE-4016 sharing issues
++    conf.set("t2", "should not be shared");
++    assertServiceConfigurationContains(svc, "t2");
++    assertServiceConfigurationContains(firstChild, "t2");
++    assertServiceConfigurationContains(lastChild, "t2");
++
++  }
++
++  /**
++   * call init twice
++   * @throws Throwable if necessary
++   */
++  @Test
++  public void testInitTwice() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    BreakableService lastChild = new BreakableService("last");
++    CompositeService svc = new CompositeService("testInitTwice");
++    svc.addService(firstChild);
++    svc.addService(lastChild);
++    Configuration conf = new Configuration();
++    conf.set("test.init","t");
++    svc.init(conf);
++    try {
++      svc.init(new Configuration());
++      fail("Expected a failure, got " + svc);
++    } catch (RuntimeException e) {
++      //something was expected
++    }
++    //verify the configuration did not change
++    assertServiceConfigurationContains(svc, "test.init");
++    //verify the first child was inited twice as state change tests of the parent
++    //are only checked after calling the children
++    assertStateCount(firstChild, Service.STATE.INITED, 2);
++
++    //that first child was expected to be the one that failed,
++    //so the second has not yet beein inited
++    assertStateCount(lastChild, Service.STATE.INITED, 1);
++
++    //finally verify the first child did not have its config replaced
++    assertServiceConfigurationContains(firstChild, "test.init");
++  }
++
++  /**
++   * Call start twice
++   * @throws Throwable if necessary
++   */
++  @Test
++  public void testStartTwice() throws Throwable {
++    BreakableService child = new BreakableService("first");
++    CompositeService svc = new CompositeService("testStartTwice");
++    svc.addService(child);
++    svc.init(new Configuration());
++    svc.start();
++    try {
++      svc.start();
++      fail("Expected a failure, got " + svc);
++    } catch (RuntimeException e) {
++      //something was expected
++    }
++    assertStateCount(child, Service.STATE.STARTED, 2);
++  }
++
++  /**
++   * Verify that when a service is stopped more than once, no exception
++   * is thrown, and the counter is incremented.
++   * This is because the state change operations happen after the counter in
++   * the subclass is incremented, even though stop is meant to be a no-op
++   * @throws Throwable if necessary
++   */
++  @Test
++  public void testStopTwice() throws Throwable {
++    BreakableService child = new BreakableService("first");
++    CompositeService svc = new CompositeService("testStartTwice");
++    svc.addService(child);
++    ServiceOperations.deploy(svc, new Configuration());
++    svc.stop();
++    assertStateCount(child, Service.STATE.STOPPED, 1);
++    svc.stop();
++    assertStateCount(child, Service.STATE.STOPPED, 1);
++  }
++
++  /**
++   * Show that if the service failed during an init
++   * operation, some of the children are initialised, but
++   * not all
++   * @throws Throwable if necessary
++   */
++
++  @Test
++  public void testStopFailedInit() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    BreakableService badChild = new BreakableService("bad", true, false, false);
++    BreakableService lastChild = new BreakableService("last");
++    CompositeService svc = new CompositeService("testStartTwice");
++    svc.addService(firstChild);
++    svc.addService(badChild);
++    svc.addService(lastChild);
++    try {
++      svc.init(new Configuration());
++      fail("Expected a failure, got " + svc);
++    } catch (RuntimeException e) {
++      //something was expected
++    }
++    //the service state wasn't passed
++    assertServiceStateCreated(svc);
++    //the first child was added
++    assertServiceStateInited(firstChild);
++    assertServiceStateCreated(badChild);
++    assertServiceStateCreated(lastChild);
++    assertStateCount(firstChild, Service.STATE.INITED, 1);
++    assertStateCount(badChild, Service.STATE.INITED, 1);
++    //last child didn't get initialised
++    assertStateCount(lastChild, Service.STATE.INITED, 0);
++    //now try to stop
++    svc.stop();
++    //even after the stop operation, child states are unchanged.
++    assertServiceStateInited(firstChild);
++    assertServiceStateCreated(badChild);
++    assertServiceStateCreated(lastChild);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 1);
++    assertStateCount(badChild, Service.STATE.STOPPED, 1);
++    assertStateCount(lastChild, Service.STATE.STOPPED, 1);
++  }
++
++
++  /**
++   * Start a service with a child that fails on startup, verify
++   * that attempts to close all were made.
++   * @throws Throwable if necessary
++   */
++
++  @Test
++  public void testFailedStart() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    BreakableService badChild = new BreakableService("bad", false, true, false);
++    BreakableService lastChild = new BreakableService("last");
++    CompositeService svc = new CompositeService("testFailedStartAndStop");
++    svc.addService(firstChild);
++    svc.addService(badChild);
++    svc.addService(lastChild);
++    svc.init(new Configuration());
++    try {
++      svc.start();
++      fail("Expected a failure, got " + svc);
++    } catch (YarnException e) {
++      //An expected failure. Verify that it was what
++      //was expected, and the service that failed was the one
++      //expected to fail.
++      Throwable cause = e.getCause();
++      assertEquals(BreakableService.BrokenLifecycleEvent.class,
++                   cause.getClass());
++      BreakableService.BrokenLifecycleEvent event =
++          (BreakableService.BrokenLifecycleEvent) cause;
++      assertSame(badChild, event.getService());
++    }
++    //the service state wasn't passed
++    assertServiceStateInited(svc);
++    //the first child was started and then stopped
++    assertServiceStateStopped(firstChild);
++    assertStateCount(firstChild, Service.STATE.STARTED, 1);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 1);
++
++    //this child failed before completing startup
++    assertServiceStateInited(badChild);
++    assertStateCount(badChild, Service.STATE.STARTED, 1);
++    assertStateCount(badChild, Service.STATE.STOPPED, 1);
++
++    //the last child never got started
++    assertServiceStateInited(lastChild);
++    assertStateCount(lastChild, Service.STATE.STARTED, 0);
++
++    //during startup rollback, the last child never got stopped
++    assertStateCount(lastChild, Service.STATE.STOPPED, 0);
++
++    //now try to stop
++    svc.stop();
++
++    assertStateCount(firstChild, Service.STATE.STOPPED, 2);
++    assertStateCount(badChild, Service.STATE.STOPPED, 2);
++    assertStateCount(lastChild, Service.STATE.STOPPED, 1);
++    //even after the stop operation, we haven't entered the state
++    assertServiceStateInited(badChild);
++  }
++
++  /**
++   * Test behaviour when a service is set to fail during startup and shutdown
++   * @throws Throwable if necessary
++   */
++
++  @Test
++  public void testFailedStartAndStop() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    //the bad child fails on start and stop
++    BreakableService badChild = new BreakableService("bad", false, true, true);
++    BreakableService lastChild = new BreakableService("last");
++    CompositeService svc = new CompositeService("testFailedStartAndStop");
++    svc.addService(firstChild);
++    svc.addService(badChild);
++    svc.addService(lastChild);
++    svc.init(new Configuration());
++    try {
++      svc.start();
++      fail("Expected a failure, got " + svc);
++    } catch (RuntimeException e) {
++      //something was expected
++    }
++    //the service state wasn't passed
++    assertServiceStateInited(svc);
++    //the first child was started and then stopped
++    assertServiceStateStopped(firstChild);
++    assertStateCount(firstChild, Service.STATE.STARTED, 1);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 1);
++
++    //this child failed before completing startup
++    assertServiceStateInited(badChild);
++    assertStateCount(badChild, Service.STATE.STARTED, 1);
++    assertStateCount(badChild, Service.STATE.STOPPED, 1);
++
++    //the last child never got started
++    assertServiceStateInited(lastChild);
++    assertStateCount(lastChild, Service.STATE.STARTED, 0);
++    //nor was it stopped during the faling startup
++    assertStateCount(lastChild, Service.STATE.STOPPED, 0);
++
++    //now try to stop
++    svc.stop();
++
++    //expect all children to be stopped again, even though
++    //bad child threw an exception
++    assertStateCount(firstChild, Service.STATE.STOPPED, 2);
++    assertStateCount(badChild, Service.STATE.STOPPED, 2);
++    //the last child did finally get stopped
++    assertStateCount(lastChild, Service.STATE.STOPPED, 1);
++  }
++
++
++  /**
++   * Demonstrate current behavior. Even in the inited, the composite service
++   * will start its children.
++   * @throws Throwable on a failure
++   */
++  @Test
++  public void testStopUnstarted() throws Throwable {
++    BreakableService firstChild = new BreakableService("first");
++    CompositeService svc = new CompositeService("testFailedStartAndStop");
++    svc.addService(firstChild);
++    svc.stop();
++    assertServiceStateCreated(svc);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 1);
++
++    //stop failed, now it can be initialised
++    svc.init(new Configuration());
++
++    //and try to stop again, with no state change but an increment
++    svc.stop();
++    assertServiceStateInited(svc);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 2);
++
++    //once started, the service can be stopped reliably
++    svc.start();
++    ServiceOperations.stop(svc);
++    assertServiceStateStopped(svc);
++    assertStateCount(firstChild, Service.STATE.STOPPED, 3);
++  }
++}
