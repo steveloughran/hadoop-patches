@@ -1,0 +1,13 @@
+<!--
+  scripted mapping without a filename
+-->
+<configuration>
+  <property>
+    <name>net.topology.node.switch.mapping.impl</name>
+    <value>org.apache.hadoop.net.TableMapping</value>
+  </property>
+  <property>
+    <name>net.topology.table.file.name</name>
+    <value>table.txt</value>
+  </property>
+</configuration>

@@ -1,0 +1,5 @@
+#list of host to rack mappings, separated by a space
+host1 /rack1
+host2 /rack1
+host3 /rack2/switch1
+host4 /rack2/switch1

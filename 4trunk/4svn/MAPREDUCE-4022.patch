@@ -1,0 +1,102 @@
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
+index 7d4de87..1de5a9d 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/DeletionService.java
+@@ -93,14 +93,16 @@ public class DeletionService extends AbstractService {
+ 
+   @Override
+   public void stop() {
+-    sched.shutdown();
+-    boolean terminated = false;
+-    try {
+-      terminated = sched.awaitTermination(10, SECONDS);
+-    } catch (InterruptedException e) {
+-    }
+-    if (terminated != true) {
+-      sched.shutdownNow();
++    if (sched != null) {
++      sched.shutdown();
++      boolean terminated = false;
++      try {
++        terminated = sched.awaitTermination(10, SECONDS);
++      } catch (InterruptedException e) {
++      }
++      if (terminated != true) {
++        sched.shutdownNow();
++      }
+     }
+     super.stop();
+   }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
+index 52e8600..aa582de 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LocalDirsHandlerService.java
+@@ -159,6 +159,7 @@ public class LocalDirsHandlerService extends AbstractService {
+   public void stop() {
+     if (dirsHandlerScheduler != null) {
+       dirsHandlerScheduler.cancel();
++      dirsHandlerScheduler = null;
+     }
+     super.stop();
+   }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
+index 0898bb2..8d37b0b 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/NodeHealthScriptRunner.java
+@@ -236,7 +236,10 @@ public class NodeHealthScriptRunner extends AbstractService {
+     if (!shouldRun(conf)) {
+       return;
+     }
+-    nodeHealthScriptScheduler.cancel();
++    if (nodeHealthScriptScheduler != null) {
++      nodeHealthScriptScheduler.cancel();
++      nodeHealthScriptScheduler = null;
++    }
+     if (shexec != null) {
+       Process p = shexec.getProcess();
+       if (p != null) {
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
+index 1eb2283..08ff3e4 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/ContainerManagerImpl.java
+@@ -267,9 +267,7 @@ public class ContainerManagerImpl extends CompositeService implements
+     if (auxiliaryServices.getServiceState() == STARTED) {
+       auxiliaryServices.unregister(this);
+     }
+-    if (server != null) {
+-      server.stop();
+-    }
++    server = stopIPCServer(server);
+     super.stop();
+   }
+ 
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
+index 744c2b1..26730d6 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/localizer/ResourceLocalizationService.java
+@@ -268,9 +268,7 @@ public class ResourceLocalizationService extends CompositeService
+ 
+   @Override
+   public void stop() {
+-    if (server != null) {
+-      server.stop();
+-    }
++    server = stopIPCServer(server);
+     cacheCleanup.shutdown();
+     super.stop();
+   }
+diff --git hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
+index 3128217..ed8321b 100644
+--- hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
++++ hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/WebServer.java
+@@ -79,9 +79,7 @@ public class WebServer extends AbstractService {
+ 
+   @Override
+   public synchronized void stop() {
+-    if (this.webApp != null) {
+-      this.webApp.stop();
+-    }
++    webApp = stopWebApp(webApp);
+     super.stop();
+   }
+ 

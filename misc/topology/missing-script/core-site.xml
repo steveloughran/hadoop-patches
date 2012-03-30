@@ -1,0 +1,13 @@
+<!--
+  scripted mapping without a filename
+-->
+<configuration>
+  <property>
+    <name>net.topology.node.switch.mapping.impl</name>
+    <value>org.apache.hadoop.net.ScriptBasedMapping</value>
+  </property>
+  <property>
+    <name>net.topology.script.file.name</name>
+    <value>there-is-no-script-with-this-name.py</value>
+  </property>
+</configuration>

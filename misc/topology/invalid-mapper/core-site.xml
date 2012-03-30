@@ -1,0 +1,9 @@
+<!--
+  scripted mapping without a filename
+-->
+<configuration>
+  <property>
+    <name>net.topology.node.switch.mapping.impl</name>
+    <value>org.apache.hadoop.net.ThisMappingClassIsNotDefined</value>
+  </property>
+</configuration>
