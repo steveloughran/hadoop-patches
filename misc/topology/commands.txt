@@ -5,6 +5,10 @@ bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Jav
 #table in a line
 bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/undefined-table org.apache.hadoop.net.TopologyTool test 4 home extra 
 
+#missing table
+bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/missing-table org.apache.hadoop.net.TopologyTool test 4 home extra 
+
+£missing-script 
 bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/missing-script org.apache.hadoop.net.TopologyTool test 4 home extra 
 
 #table defined
@@ -15,3 +19,5 @@ bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Jav
 
 bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/invalid-mapper org.apache.hadoop.net.TopologyTool testfile /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/hosts.txt
 
+bash hadoop-dist/target/hadoop-3.0.0-SNAPSHOT/bin/hadoop --config /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/valid-script org.apache.hadoop.net.TopologyTool testfile /Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/hosts.txt
+/Users/slo/Java/Hadoop/github/hadoop-patches/misc/topology/valid-script
