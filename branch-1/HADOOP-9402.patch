@@ -1,0 +1,38 @@
+diff --git a/ivy.xml b/ivy.xml
+index 1f28473..ef51735 100644
+--- a/ivy.xml
++++ b/ivy.xml
+@@ -89,6 +89,10 @@
+       name="commons-io"
+       rev="${commons-io.version}"
+       conf="client->default"/>
++    <dependency org="commons-net"
++      name="commons-net"
++      rev="${commons-net.version}"
++      conf="client->master"/>
+ 
+     <dependency org="checkstyle"
+       name="checkstyle"
+@@ -130,11 +134,6 @@
+       rev="${commons-codec.version}"
+       conf="httpclient->default"/>
+ 
+-    <dependency org="commons-net"
+-      name="commons-net"
+-      rev="${commons-net.version}"
+-      conf="ftp->default"/>
+-
+     <dependency org="commons-configuration"
+       name="commons-configuration"
+       rev="${commons-configuration.version}"
+@@ -228,10 +227,6 @@
+       name="jets3t"
+       rev="${jets3t.version}"
+       conf="s3-client->master"/>
+-    <dependency org="commons-net"
+-      name="commons-net"
+-      rev="${commons-net.version}"
+-      conf="s3-client->master"/> 
+ 
+     <!--Configuration: kfs -->
+ 

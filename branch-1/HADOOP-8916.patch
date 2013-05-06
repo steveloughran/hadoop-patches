@@ -1,0 +1,34 @@
+From a9c6fe5c6bec49a32fd5ae2a4fe470bee433e735 Mon Sep 17 00:00:00 2001
+From: Steve Loughran <stevel@hortonworks.com>
+Date: Thu, 11 Oct 2012 11:32:16 +0100
+Subject: [PATCH] make forrest optional on the 1.x branch
+
+---
+ build.xml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/build.xml b/build.xml
+index de144e4..632d8e9 100644
+--- a/build.xml
++++ b/build.xml
+@@ -1297,7 +1297,7 @@
+   <!-- Documentation                                                      -->
+   <!-- ================================================================== -->
+   
+-  <target name="docs" depends="forrest.check" description="Generate forrest-based documentation. To use, specify -Dforrest.home=&lt;base of Apache Forrest installation&gt; on the command line." if="forrest.home">
++  <target name="docs" depends="init" description="Generate forrest-based documentation. To use, specify -Dforrest.home=&lt;base of Apache Forrest installation&gt; on the command line." if="forrest.home">
+     <echo file="${build.dir}/hadoop.ent" append="false">
+       &lt;!ENTITY HadoopVersion "${version}"&gt; 
+     </echo>
+@@ -1318,7 +1318,7 @@
+     <antcall target="changes-to-html"/>
+   </target>
+ 
+-  <target name="cn-docs" depends="forrest.check, init" 
++  <target name="cn-docs" depends="init" 
+        description="Generate forrest-based Chinese documentation. To use, specify -Dforrest.home=&lt;base of Apache Forrest installation&gt; on the command line." 
+         if="forrest.home">
+     <exec dir="${src.docs.cn}" executable="${forrest.home}/bin/forrest" failonerror="true">
+-- 
+1.7.11.1
+

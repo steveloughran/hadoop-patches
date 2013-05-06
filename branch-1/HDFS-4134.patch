@@ -1,0 +1,26 @@
+diff --git src/hdfs/org/apache/hadoop/hdfs/server/datanode/DataNode.java src/hdfs/org/apache/hadoop/hdfs/server/datanode/DataNode.java
+index 9f1ea00..96ef252 100644
+--- src/hdfs/org/apache/hadoop/hdfs/server/datanode/DataNode.java
++++ src/hdfs/org/apache/hadoop/hdfs/server/datanode/DataNode.java
+@@ -1550,7 +1550,7 @@ public class DataNode extends Configured
+       conf = new Configuration();
+     if (!parseArguments(args, conf)) {
+       printUsage();
+-      return null;
++      System.exit(-2);
+     }
+     if (conf.get("dfs.network.script") != null) {
+       LOG.error("This configuration for rack identification is not supported" +
+diff --git src/hdfs/org/apache/hadoop/hdfs/server/namenode/NameNode.java src/hdfs/org/apache/hadoop/hdfs/server/namenode/NameNode.java
+index d9e05fb..841c5c4 100644
+--- src/hdfs/org/apache/hadoop/hdfs/server/namenode/NameNode.java
++++ src/hdfs/org/apache/hadoop/hdfs/server/namenode/NameNode.java
+@@ -1260,7 +1260,7 @@ public class NameNode implements ClientProtocol, DatanodeProtocol,
+     StartupOption startOpt = parseArguments(argv);
+     if (startOpt == null) {
+       printUsage();
+-      return null;
++      System.exit(-2);
+     }
+     setStartupOption(conf, startOpt);
+ 

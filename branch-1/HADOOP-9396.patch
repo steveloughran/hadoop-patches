@@ -1,0 +1,12 @@
+diff --git a/ivy/libraries.properties b/ivy/libraries.properties
+index 2d2a6b6..41d9796 100644
+--- a/ivy/libraries.properties
++++ b/ivy/libraries.properties
+@@ -22,7 +22,6 @@ apacheant.version=1.7.0
+ ant-task.version=2.0.10
+ 
+ asm.version=3.2
+-aspectj.version=1.6.5
+ aspectj.version=1.6.11
+ 
+ checkstyle.version=4.2
